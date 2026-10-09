@@ -1,0 +1,1544 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="night">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Read Aloud">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<title>Read Aloud</title>
+<style>
+:root{
+  --fs:20px;
+  --ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --read:"Iowan Old Style","Charter","Sitka Text",Georgia,"Times New Roman",serif;
+}
+:root[data-theme="night"]{
+  --bg:#000000; --ink:#E6E0D3; --dim:#8C8676; --line:#2A2824;
+  --panel:#151412; --btn:#201E1B; --lamp:#F2B544; --lampbg:rgba(242,181,68,.17); --onlamp:#000000;
+  color-scheme:dark;
+}
+:root[data-theme="day"]{
+  --bg:#FFFFFF; --ink:#1D1F23; --dim:#666A71; --line:#E2E2DE;
+  --panel:#F4F4F1; --btn:#E9E9E5; --lamp:#B7791F; --lampbg:#FFE6A1; --onlamp:#FFFFFF;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--ui);
+  display:grid; grid-template-rows:auto 1fr auto; height:100dvh; overflow:hidden;
+  -webkit-tap-highlight-color:transparent;
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;border-radius:10px}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--lamp);outline-offset:2px}
+svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;display:block}
+
+/* Top bar */
+.top{
+  display:flex;align-items:center;gap:6px;
+  padding:calc(env(safe-area-inset-top) + 6px) 10px 6px;
+  border-bottom:1px solid var(--line);
+}
+.titles{flex:1;min-width:0;text-align:center}
+.top h1{margin:0;font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#where{font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:15px}
+.iconbtn{width:44px;height:44px;display:grid;place-items:center;color:var(--ink)}
+.iconbtn:active{background:var(--btn)}
+
+/* Reading area */
+#reader{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;position:relative}
+#text{
+  font-family:var(--read); font-size:var(--fs); line-height:1.7;
+  max-width:36em; margin:0 auto; padding:24px 22px 40vh;
+  -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+}
+#text p.head{font-weight:700}
+#text p.skipped{opacity:.38}
+#text span.bs::before{content:"⟦";color:var(--lamp);font-weight:700;margin-right:3px}
+#text span.be::after{content:"⟧";color:var(--lamp);font-weight:700;margin-left:3px}
+#text p{margin:0 0 .9em;padding-left:14px;border-left:2px solid transparent;content-visibility:auto;contain-intrinsic-size:auto 4em}
+#text p.curp{border-left-color:var(--lamp)}
+#text span{cursor:pointer;border-radius:4px;-webkit-box-decoration-break:clone;box-decoration-break:clone;padding:1px 0}
+#text span.cur{background:var(--lampbg)}
+@media (hover:hover){#text span:hover{text-decoration:underline;text-decoration-color:var(--dim);text-underline-offset:4px}}
+
+#empty{max-width:30em;margin:12vh auto 0;padding:0 24px;text-align:center}
+#empty h2{font-family:var(--read);font-weight:400;font-size:28px;margin:0 0 10px}
+#empty p{color:var(--dim);line-height:1.5;margin:0 0 24px}
+.row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.btn{padding:12px 18px;background:var(--btn);font-weight:500;min-height:44px}
+.btn.primary{background:var(--lamp);color:var(--onlamp)}
+.btn:disabled{opacity:.45;cursor:default}
+
+#follow{
+  position:fixed;left:50%;transform:translateX(-50%);
+  bottom:calc(env(safe-area-inset-bottom) + 150px);
+  background:var(--panel);border:1px solid var(--line);padding:10px 16px;font-size:14px;z-index:5;
+}
+
+/* Resume bar */
+#resume{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;
+  padding:10px 14px;border-top:1px solid var(--line);background:var(--panel);font-size:15px;
+}
+#resume span{color:var(--dim)}
+#planBar{display:flex;align-items:center;gap:10px;justify-content:center;padding:8px 14px;border-top:1px solid var(--line);font-size:14px}
+#planBar span{color:var(--lamp);font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#planBar .btn{padding:8px 12px;min-height:36px;font-size:14px}
+
+/* Player */
+.player{border-top:1px solid var(--line);padding:8px 12px calc(env(safe-area-inset-bottom) + 8px);background:var(--bg)}
+.prog{display:flex;align-items:center;gap:12px;max-width:640px;margin:0 auto}
+.prog input{flex:1}
+#progLabel{font-size:13px;color:var(--dim);min-width:11em;text-align:right;font-variant-numeric:tabular-nums}
+.controls{display:flex;align-items:center;justify-content:space-between;max-width:520px;margin:6px auto 0}
+#play{width:64px;height:64px;border-radius:50%;background:var(--lamp);color:var(--onlamp);display:grid;place-items:center}
+#play svg{width:30px;height:30px;fill:currentColor;stroke:none}
+.small{font-size:14px;font-weight:600;min-width:52px;height:44px;font-variant-numeric:tabular-nums}
+#timerBtn{display:flex;align-items:center;gap:4px;justify-content:center;padding:0 6px}
+#timerBtn svg{width:20px;height:20px}
+#timerBtn.on{color:var(--lamp)}
+
+input[type=range]{accent-color:var(--lamp);height:28px}
+
+/* Dialogs */
+dialog{
+  border:0;padding:0;background:var(--panel);color:var(--ink);
+  width:min(560px,100vw);max-height:min(88dvh,820px);border-radius:16px;
+}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+@media (max-width:600px){
+  dialog{margin:auto 0 0;max-width:100vw;border-radius:16px 16px 0 0;padding-bottom:env(safe-area-inset-bottom)}
+}
+.dhead{display:flex;align-items:center;padding:10px 10px 6px 20px;position:sticky;top:0;background:var(--panel);z-index:1}
+.dhead h2{flex:1;margin:0;font-size:18px}
+.dbody{padding:4px 20px 22px}
+.field{margin:18px 0}
+.field > label, .field > .lbl{display:block;font-weight:600;margin-bottom:8px}
+.hint{color:var(--dim);font-size:14px;line-height:1.45;margin:6px 0 0}
+.seg{display:flex;background:var(--btn);border-radius:10px;padding:3px}
+.seg button{flex:1;padding:9px 6px;border-radius:8px;font-size:15px}
+.seg button[aria-pressed="true"]{background:var(--bg);font-weight:600}
+select,textarea,input[type=text],input[type=number]{
+  width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);
+  border-radius:10px;padding:10px;font:inherit;font-size:16px;
+}
+textarea{min-height:40dvh;font-family:var(--read);line-height:1.5;resize:vertical}
+.field > label.switch,.switch{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;margin:0;font-weight:400}
+.switch input{width:22px;height:22px;accent-color:var(--lamp)}
+.voice{display:grid;grid-template-columns:7.5em 1fr auto;gap:8px;align-items:center;margin:8px 0}
+.voice .warn{grid-column:2/4;color:var(--lamp);font-size:13px;margin-top:-4px}
+
+/* Library */
+.libactions{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 14px}
+.libactions .btn{flex:1;min-width:9em}
+#libList{list-style:none;margin:0;padding:0}
+#libList li{display:flex;align-items:center;gap:6px;border-top:1px solid var(--line);padding:6px 0}
+#libList li.active .t{color:var(--lamp)}
+.docbtn{flex:1;text-align:left;padding:8px 6px;min-width:0}
+.docbtn .t{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.docbtn .m{display:block;font-size:13px;color:var(--dim);margin-top:2px}
+.bar{height:3px;background:var(--line);border-radius:2px;margin-top:6px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--lamp)}
+.backup{display:flex;gap:10px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+.backup .btn{flex:1}
+
+.opts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.opts button{background:var(--btn);padding:12px 4px;font-size:15px}
+.opts button[aria-pressed="true"]{background:var(--lamp);color:var(--onlamp);font-weight:600}
+.opts .wide{grid-column:span 2}
+
+#toast{
+  position:fixed;left:50%;transform:translateX(-50%);
+  bottom:calc(env(safe-area-inset-bottom) + 140px);
+  background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;
+  font-size:14px;max-width:min(90vw,480px);text-align:center;z-index:50;
+  opacity:0;pointer-events:none;transition:opacity .2s;
+}
+#toast.show{opacity:1}
+#drop{position:fixed;inset:0;border:3px dashed var(--lamp);background:rgba(0,0,0,.4);display:none;z-index:60;place-items:center;font-size:20px;color:#fff}
+#drop.show{display:grid}
+/* Sentence menu */
+#sentQuote{font-family:var(--read);color:var(--dim);margin:0 0 10px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.menu button{display:block;width:100%;text-align:left;padding:14px 8px;border-top:1px solid var(--line);border-radius:0;font-size:16px}
+/* Contents */
+.toc{list-style:none;margin:0;padding:0}
+.toc li{display:flex;align-items:center;gap:6px;border-top:1px solid var(--line)}
+.toc .tocbtn{flex:1;text-align:left;padding:11px 6px;min-width:0;line-height:1.35}
+.toc .lv2 .tocbtn{padding-left:22px}.toc .lv3 .tocbtn{padding-left:38px}
+.toc .pg{color:var(--dim);font-size:13px;margin-left:6px;white-space:nowrap}
+.toc li.cur .tocbtn{color:var(--lamp);font-weight:600}
+.only{font-size:14px;padding:8px 10px;background:var(--btn);white-space:nowrap}
+.pagerow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.pagerow input{width:5.5em}
+h3.sec{font-size:15px;margin:22px 0 6px}
+details pre{white-space:pre-wrap;font-size:11px;max-height:40dvh;overflow:auto;background:var(--bg);padding:8px;border-radius:8px}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <button class="iconbtn" id="btnLib" aria-label="Library">
+    <svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10"/></svg>
+  </button>
+  <div class="titles"><h1 id="docTitle">Read Aloud</h1><div id="where"></div></div>
+  <button class="iconbtn" id="btnToc" aria-label="Contents and reading blocks">
+    <svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>
+  </button>
+  <button class="iconbtn" id="btnSettings" aria-label="Settings">
+    <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+  </button>
+</header>
+
+<main id="reader">
+  <div id="empty">
+    <h2>What should I read?</h2>
+    <p>Paste text, or open a Word, PDF or text file. Your reading position is saved on this device.</p>
+    <div class="row">
+      <button class="btn primary" data-act="paste">Paste text</button>
+      <button class="btn" data-act="open">Open file</button>
+    </div>
+  </div>
+  <div id="text" hidden></div>
+</main>
+
+<div>
+  <div id="planBar" hidden><span id="planLabel"></span><button class="btn" id="planStop">Read normally</button></div>
+  <div id="resume" hidden>
+    <span id="resumeLabel"></span>
+    <button class="btn primary" id="resumeGo">Continue</button>
+    <button class="btn" id="resumeStart">From start</button>
+  </div>
+  <footer class="player">
+    <div class="prog">
+      <input type="range" id="prog" min="0" max="0" value="0" aria-label="Position in document">
+      <span id="progLabel"></span>
+    </div>
+    <div class="controls">
+      <button class="small" id="timerBtn" aria-label="Sleep timer">
+        <svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><span id="timerLabel"></span>
+      </button>
+      <button class="iconbtn" id="prevPara" aria-label="Previous paragraph">
+        <svg viewBox="0 0 24 24"><path d="M11 6l-6 6 6 6M19 6l-6 6 6 6"/></svg>
+      </button>
+      <button class="iconbtn" id="prevSent" aria-label="Previous sentence">
+        <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>
+      </button>
+      <button id="play" aria-label="Play">
+        <svg viewBox="0 0 24 24" id="playIcon"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <button class="iconbtn" id="nextSent" aria-label="Next sentence">
+        <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+      <button class="iconbtn" id="nextPara" aria-label="Next paragraph">
+        <svg viewBox="0 0 24 24"><path d="M5 6l6 6-6 6M13 6l6 6-6 6"/></svg>
+      </button>
+      <button class="small" id="rateBtn" aria-label="Reading speed">1.0×</button>
+    </div>
+  </footer>
+</div>
+
+<button id="follow" class="btn" hidden>Back to current sentence</button>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="drop">Drop a file to read it</div>
+
+<input type="file" id="fileIn" hidden accept=".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain">
+<input type="file" id="importIn" hidden accept=".json,application/json,text/plain">
+
+<!-- Library -->
+<dialog id="dlgLib">
+  <div class="dhead"><h2>Library</h2><button class="iconbtn" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="dbody">
+    <div class="libactions">
+      <button class="btn primary" data-act="paste">Paste text</button>
+      <button class="btn" data-act="open">Open file</button>
+    </div>
+    <ul id="libList"></ul>
+    <p class="hint" id="libEmpty">No documents yet.</p>
+    <div class="backup">
+      <button class="btn" id="btnExport">Export backup</button>
+      <button class="btn" id="btnImport">Import backup</button>
+    </div>
+    <p class="hint">Move reading positions between your PC and iPhone: export here, transfer the file (iCloud Drive, OneDrive, AirDrop, email), then import on the other device.</p>
+  </div>
+</dialog>
+
+<!-- Paste -->
+<dialog id="dlgPaste">
+  <div class="dhead"><h2>Paste text</h2><button class="iconbtn" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="dbody">
+    <div class="field"><label for="pasteTitle">Title (optional)</label><input type="text" id="pasteTitle" placeholder="Taken from the first line if empty"></div>
+    <div class="field"><label for="pasteText">Text</label><textarea id="pasteText" placeholder="Paste or type here"></textarea></div>
+    <button class="btn primary" id="pasteSave" style="width:100%">Add to library</button>
+  </div>
+</dialog>
+
+<!-- Sleep timer -->
+<dialog id="dlgTimer">
+  <div class="dhead"><h2>Sleep timer</h2><button class="iconbtn" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="dbody">
+    <p class="hint" id="timerState"></p>
+    <div class="opts" id="timerOpts">
+      <button data-t="off">Off</button><button data-t="5">5 min</button><button data-t="10">10 min</button><button data-t="15">15 min</button>
+      <button data-t="30">30 min</button><button data-t="45">45 min</button><button data-t="60">60 min</button><button data-t="para">Paragraph end</button>
+    </div>
+    <div class="row" style="margin-top:14px" id="timerActive" hidden>
+      <button class="btn" id="timerAdd">Add 5 min</button>
+      <button class="btn" id="timerCancel">Cancel timer</button>
+    </div>
+    <p class="hint">Reading stops after the current sentence when time is up. Your choice is used again next time you press play.</p>
+  </div>
+</dialog>
+
+<!-- Settings -->
+<dialog id="dlgSettings">
+  <div class="dhead"><h2>Settings</h2><button class="iconbtn" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="dbody">
+    <div class="field"><span class="lbl">Display</span>
+      <div class="seg" id="themeSeg"><button data-v="night">Night</button><button data-v="day">Day</button></div>
+    </div>
+    <div class="field"><span class="lbl">Text size</span>
+      <div class="seg" id="fontSeg"><button data-d="-2" aria-label="Smaller text">A−</button><button disabled id="fontVal">20</button><button data-d="2" aria-label="Larger text">A+</button></div>
+    </div>
+    <div class="field"><label for="rateRange">Speed <span id="rateVal"></span></label>
+      <input type="range" id="rateRange" min="0.5" max="2" step="0.05" style="width:100%">
+    </div>
+    <div class="field">
+      <label class="switch"><span>Keep screen awake while reading</span><input type="checkbox" id="optWake"></label>
+      <p class="hint" id="wakeHint"></p>
+      <label class="switch"><span>Fade out at end of sleep timer</span><input type="checkbox" id="optFade"></label>
+    </div>
+    <div class="field" id="docLangField" hidden>
+      <label for="docLang">Language of this document</label>
+      <select id="docLang">
+        <option value="auto">Detect automatically (per paragraph)</option>
+        <option value="sv">Svenska</option><option value="en">English</option>
+        <option value="ru">Русский</option><option value="uk">Українська</option>
+      </select>
+    </div>
+    <div class="field"><span class="lbl">Voices</span>
+      <div id="voiceList"></div>
+      <p class="hint" id="voiceHint"></p>
+    </div>
+    <details class="field"><summary>Diagnostics</summary>
+      <p class="hint">A log of speech events. Copy it if reading stalls, so the cause can be found.</p>
+      <pre id="diagLog"></pre>
+      <button class="btn" id="diagCopy">Copy log</button>
+    </details>
+  </div>
+</dialog>
+
+<!-- Sentence menu -->
+<dialog id="dlgSent">
+  <div class="dhead"><h2>This sentence</h2><button class="iconbtn" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="dbody">
+    <p id="sentQuote"></p>
+    <div class="menu">
+      <button id="mRead">Read from here</button>
+      <button id="mStart">Set start here</button>
+      <button id="mEnd">Set end here</button>
+      <button id="mChap">Mark as chapter</button>
+      <button id="mSkip">Skip this paragraph</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Contents -->
+<dialog id="dlgToc">
+  <div class="dhead"><h2>Contents</h2><button class="iconbtn" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="dbody">
+    <div id="pageBox" hidden>
+      <h3 class="sec">Pages</h3>
+      <div class="pagerow"><label for="goPage">Go to page</label><input type="number" id="goPage" min="1" inputmode="numeric"><button class="btn" id="goPageBtn">Go</button></div>
+      <div class="pagerow"><span>Read only pages</span><input type="number" id="pgFrom" min="1" inputmode="numeric" aria-label="From page"><span>to</span><input type="number" id="pgTo" min="1" inputmode="numeric" aria-label="To page"><button class="btn primary" id="pgRead">Read</button></div>
+    </div>
+    <h3 class="sec">Chapters</h3>
+    <ul class="toc" id="tocList"></ul>
+    <p class="hint" id="tocEmpty">No chapters found. Long-press a paragraph and choose Mark as chapter.</p>
+    <h3 class="sec">Reading blocks</h3>
+    <ul class="toc" id="blockList"></ul>
+    <p class="hint" id="blockEmpty">Long-press a sentence and choose Set start here, then Set end here. Without an end, a block reads to the end of the text.</p>
+    <div class="row" id="blockActions" style="justify-content:flex-start;margin-top:10px" hidden>
+      <button class="btn primary" id="blocksRead">Read all blocks</button>
+      <button class="btn" id="blocksClear">Remove all blocks</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Export -->
+<dialog id="dlgExport">
+  <div class="dhead"><h2>Export backup</h2><button class="iconbtn" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="dbody">
+    <label class="switch"><span>Include document texts</span><input type="checkbox" id="expTexts" checked></label>
+    <p class="hint">With texts, documents open on the other device without the original files. Without texts, the file only holds positions and settings, and positions attach when you open the same file there.</p>
+    <p class="hint" id="expInfo"></p>
+    <button class="btn primary" id="expSave" style="width:100%;margin-top:14px" disabled>Save backup file</button>
+  </div>
+</dialog>
+
+<!-- Import -->
+<dialog id="dlgImport">
+  <div class="dhead"><h2>Import backup</h2><button class="iconbtn" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="dbody">
+    <span class="lbl" style="font-weight:600">When a document exists on both devices</span>
+    <div class="seg" id="impSeg" style="margin-top:8px"><button data-v="furthest" aria-pressed="true">Keep furthest position</button><button data-v="imported">Use imported</button></div>
+    <button class="btn primary" id="impChoose" style="width:100%;margin-top:18px">Choose backup file</button>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+/* ================= Core text logic (no DOM) ================= */
+const LANGS = ['sv','en','ru','uk'];
+const LANG_NAME = {sv:'Svenska', en:'English', ru:'Русский', uk:'Українська'};
+const LANG_TAG = {sv:'sv-SE', en:'en-GB', ru:'ru-RU', uk:'uk-UA'};
+const SAMPLE = {sv:'Det här är en provmening.', en:'This is a sample sentence.', ru:'Это пример предложения.', uk:'Це приклад речення.'};
+
+function joinLine(a, b){
+  if (/\p{L}-$/u.test(a) && /^\p{Ll}/u.test(b)) return a.slice(0,-1) + b;   // de-hyphenate
+  return a + ' ' + b;
+}
+// Structure markers used during import (private-use characters, removed again by extractMarks):
+// U+E000 = a new PDF page starts here; U+E001..E003 = heading of level 1..3 at line start.
+const MK = /[\uE000-\uE00F]/g;
+const HEADMK = /[\uE001-\uE003]/;
+// Clean text; one paragraph per line. Lines broken mid-sentence are re-joined.
+function normalize(raw){
+  const lines = raw.replace(/\r\n?/g,'\n').replace(/\u00AD/g,'')
+    .replace(/[\u00A0\u2000-\u200B\t\f\v]/g,' ')
+    .split('\n').map(l => l.replace(/ {2,}/g,' ').trim()).filter(Boolean);
+  const out = [];
+  for (const l of lines){
+    const prev = out[out.length-1];
+    const pc = prev ? prev.replace(MK,'') : '', lc = l.replace(MK,'');
+    if (prev && pc && !HEADMK.test(prev) && !HEADMK.test(l) && !/[.!?…:;"”»)\]]$/.test(pc) && /^\p{Ll}/u.test(lc)){
+      out[out.length-1] = (/\p{L}-$/u.test(pc) && /^\p{Ll}/u.test(lc)) ? prev.slice(0,-1) + l : prev + ' ' + l;
+    } else out.push(l);
+  }
+  return out.join('\n');
+}
+// Remove markers; return clean text plus page start offsets and headings.
+function extractMarks(norm){
+  const pages = [], heads = [], out = []; let pos = 0;
+  for (const line of norm.split('\n')){
+    let clean = '', lvl = 0;
+    for (const ch of line){
+      if (ch === '\uE000') pages.push(pos + clean.length);
+      else if (ch >= '\uE001' && ch <= '\uE003') lvl = ch.charCodeAt(0) - 0xE000;
+      else clean += ch;
+    }
+    clean = clean.trim();
+    if (!clean) continue;                       // marker-only line: its page starts at the next line
+    if (lvl) heads.push({off:pos, level:lvl, title:clean.slice(0,100)});
+    out.push(clean); pos += clean.length + 1;
+  }
+  const text = out.join('\n');
+  return {text, pages: pages.map(p => Math.min(p, Math.max(0, text.length - 1))), heads};
+}
+// Guess headings in text without structure (pasted text, .txt, PDFs without bookmarks).
+const HEAD_WORD = /^(chapter|part|section|kapitel|del|avsnitt|глава|часть|раздел|розділ|частина)\s+([\dIVXLCivxlc]+|\p{L}+)\b/iu;
+const SECT = /^(\d+(\.\d+)*\.?\s+)?(abstract|summary|introduction|background|methods?|materials and methods|results|discussion|conclusions?|references|acknowledge?ments|sammanfattning|inledning|bakgrund|metod|resultat|diskussion|slutsats(er)?|referenser|аннотация|введение|методы|результаты|обсуждение|заключение|выводы|литература|анотація|вступ|методи|результати|обговорення|висновки|література)$/iu;
+function headLevel(line){
+  if (line.length < 2 || line.length > 90) return 0;
+  if (HEAD_WORD.test(line)) return 1;
+  if (/[.!?,;:]$/.test(line)) return 0;
+  const m = line.match(/^(\d+(?:\.\d+){0,3})\.?\s+\p{Lu}/u);
+  if (m && line.length <= 70) return Math.min(3, m[1].split('.').length);
+  if (SECT.test(line)) return 1;
+  if (/^[IVXLC]+\.\s+\p{Lu}/u.test(line) && line.length <= 70) return 1;
+  const letters = line.replace(/[^\p{L}]/gu,'');
+  if (letters.length >= 3 && letters === letters.toUpperCase() && letters !== letters.toLowerCase() && line.length <= 60) return 1;
+  return 0;
+}
+function autoHeads(text){
+  const res = []; let pos = 0; const lines = text.split('\n');
+  lines.forEach(l => { const lv = headLevel(l); if (lv) res.push({off:pos, level:lv, title:l.slice(0,100)}); pos += l.length + 1; });
+  // three or more "headings" in a row are probably a list, not headings
+  const offs = new Set(); let start = 0; pos = 0; const flags = lines.map(l => !!headLevel(l));
+  for (let i = 0; i <= flags.length; i++){
+    if (i === flags.length || !flags[i]){ if (i - start >= 3) for (let j = start; j < i; j++) offs.add(j); start = i + 1; }
+  }
+  const lineStarts = []; pos = 0; for (const l of lines){ lineStarts.push(pos); pos += l.length + 1; }
+  const bad = new Set([...offs].map(i => lineStarts[i]));
+  return res.filter(h => !bad.has(h.off));
+}
+function hash(str){
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < str.length; i++){ const c = str.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1>>>16), 2246822507) ^ Math.imul(h2 ^ (h2>>>13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2>>>16), 2246822507) ^ Math.imul(h1 ^ (h1>>>13), 3266489909);
+  return (h2>>>0).toString(16).padStart(8,'0') + (h1>>>0).toString(16).padStart(8,'0');
+}
+const makeId = text => 'd' + hash(text) + text.length.toString(36);
+
+const ABBR = new Set(['mr','mrs','ms','dr','prof','st','vs','fig','no','nr','ca','resp','jr','sr','ex','bla','dvs','mfl','pga','ev','jfr','kap','sid','tel','jan','feb','aug','sept','okt','nov','dec',
+  'гг','им','др','см','стр','рис','тыс','млн','млрд','проф','акад','ул','пр','напр','див','тис','обл']);
+const MAXLEN = 220;
+// Returns [start,end] pairs within one paragraph.
+function splitSentences(p){
+  const out = []; let start = 0, m;
+  const re = /[.!?…]+["'”’»)\]]*\s+(?=["'“‘«(\[]?[\p{Lu}\p{N}–—-])/gu;
+  while ((m = re.exec(p))){
+    if (m[0][0] === '.'){
+      const w = p.slice(start, m.index).match(/(\p{L}+)$/u);
+      if (w && (w[1].length === 1 || ABBR.has(w[1].toLowerCase()))) continue;
+    }
+    out.push([start, m.index + m[0].trimEnd().length]);
+    start = m.index + m[0].length;
+  }
+  if (start < p.length) out.push([start, p.length]);
+  const res = [];
+  for (const [s,e] of out) for (const c of capLength(s, e, p)) res.push(c);
+  return res.filter(([s,e]) => p.slice(s,e).trim());
+}
+function capLength(s, e, p){
+  if (e - s <= MAXLEN) return [[s,e]];
+  const parts = []; let a = s;
+  while (e - a > MAXLEN){
+    const seg = p.slice(a, a + MAXLEN); let cut = -1, mm; const r = /[,;:–—)]\s/g;
+    while ((mm = r.exec(seg))) if (mm.index > 60) cut = a + mm.index + 1;
+    if (cut < 0){ const sp = seg.lastIndexOf(' '); cut = sp > 60 ? a + sp : a + MAXLEN; }
+    parts.push([a, cut]); a = cut; while (p[a] === ' ') a++;
+  }
+  parts.push([a, e]); return parts;
+}
+
+const W_SV = new Set('och att det som en är på för med inte jag har av till om den de var kan ett vi ska eller men så från också hur när vad'.split(' '));
+const W_EN = new Set('the and of to is in that it for was with as are this be have not you he they on at by from but or which what when'.split(' '));
+const W_RU = new Set('и что это как он она они был была было но также от его их ещё еще который которые чтобы если только уже'.split(' '));
+const W_UK = new Set('і й що це як він вона вони був була було але також від його їх ще який які щоб якщо тільки вже'.split(' '));
+function rawDetect(t){
+  const cyr = (t.match(/[\u0400-\u04FF]/g) || []).length;
+  const lat = (t.match(/[A-Za-zÀ-ÿ]/g) || []).length;
+  if (cyr + lat < 2) return {script:null, lang:null, w:0};
+  const words = t.toLowerCase().split(/[^\p{L}]+/u);
+  const cnt = set => words.reduce((n,w) => n + (set.has(w) ? 1 : 0), 0);
+  if (cyr >= lat){
+    const uk = (t.match(/[іїєґІЇЄҐ]/g) || []).length + 2*cnt(W_UK);
+    const ru = (t.match(/[ыэъёЫЭЪЁ]/g) || []).length + 2*cnt(W_RU);
+    return {script:'cyr', lang: uk > ru ? 'uk' : ru > uk ? 'ru' : null, w:cyr};
+  }
+  const sv = (t.match(/[åäöÅÄÖ]/g) || []).length + 2*cnt(W_SV);
+  const en = 2*cnt(W_EN);
+  return {script:'lat', lang: sv > en ? 'sv' : en > sv ? 'en' : null, w:lat};
+}
+// Build paragraphs + sentences with absolute character offsets.
+function buildModel(text, override){
+  const lines = text.split('\n'); const paras = []; const sents = [];
+  const raw = lines.map(rawDetect);
+  const tally = {cyr:{}, lat:{}};
+  raw.forEach(r => { if (r.lang) tally[r.script][r.lang] = (tally[r.script][r.lang] || 0) + r.w; });
+  const top = (o, d) => Object.keys(o).sort((a,b) => o[b]-o[a])[0] || d;
+  const def = {cyr: top(tally.cyr,'ru'), lat: top(tally.lat,'en')};
+  const docDefault = (Object.values(tally.cyr).reduce((a,b)=>a+b,0) > Object.values(tally.lat).reduce((a,b)=>a+b,0)) ? def.cyr : def.lat;
+  let pos = 0;
+  lines.forEach((line, pi) => {
+    const r = raw[pi];
+    const lang = (override && override !== 'auto') ? override : (r.lang || (r.script ? def[r.script] : docDefault));
+    const para = {s:pos, e:pos+line.length, lang, first:sents.length, last:sents.length-1};
+    for (const [a,b] of splitSentences(line)) sents.push({s:pos+a, e:pos+b, p:pi});
+    para.last = sents.length - 1;
+    paras.push(para);
+    pos += line.length + 1;
+  });
+  return {paras, sents};
+}
+function idxFromOffset(sents, off){
+  let lo = 0, hi = sents.length - 1, ans = 0;
+  while (lo <= hi){ const mid = (lo+hi) >> 1; if (sents[mid].s <= off){ ans = mid; lo = mid+1; } else hi = mid-1; }
+  return ans;
+}
+function sortedIdx(arr, v){ // index of last element <= v, or -1
+  let lo = 0, hi = arr.length - 1, ans = -1;
+  while (lo <= hi){ const mid = (lo+hi) >> 1; if (arr[mid] <= v){ ans = mid; lo = mid+1; } else hi = mid-1; }
+  return ans;
+}
+/* ================= end core ================= */
+
+const $ = id => document.getElementById(id);
+const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const HAS_TTS = 'speechSynthesis' in window;
+const MOBILE = IOS || /Android/i.test(navigator.userAgent);
+const EDGE = /Edg\//.test(navigator.userAgent);
+const Diag = {
+  lines:[],
+  add(msg){ const t = new Date().toISOString().slice(11,23); this.lines.push(t + ' ' + msg); if (this.lines.length > 300) this.lines.shift();
+            const el = document.getElementById('diagLog'); if (el && el.offsetParent) el.textContent = this.lines.join('\n'); }
+};
+
+/* ---------- Settings ---------- */
+const DEFAULTS = {theme:'night', font:20, rate:1, wake:true, fade:true, timer:'off', voices:{}, lastDoc:null, firstUse:0, lastBackup:0};
+let S = (() => { try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('readaloud.settings') || '{}')); } catch { return {...DEFAULTS}; } })();
+function saveS(){ try { localStorage.setItem('readaloud.settings', JSON.stringify(S)); } catch {} }
+
+/* ---------- Storage (IndexedDB, memory fallback) ---------- */
+const DB = {
+  db:null, mem:null,
+  async open(){
+    try {
+      this.db = await new Promise((res, rej) => {
+        const r = indexedDB.open('readaloud', 1);
+        r.onupgradeneeded = () => { const d = r.result; d.createObjectStore('meta', {keyPath:'id'}); d.createObjectStore('text'); };
+        r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+      });
+    } catch (e) { this.mem = {meta:new Map(), text:new Map()}; toast('Storage is unavailable here: documents will not be saved.'); }
+  },
+  tx(store, mode, fn){
+    if (this.mem) return Promise.resolve(fn(null));
+    return new Promise((res, rej) => {
+      const t = this.db.transaction(store, mode); const r = fn(t.objectStore(store)); let out;
+      if (r) r.onsuccess = () => { out = r.result; };
+      t.oncomplete = () => res(out); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+    });
+  },
+  allMeta(){ return this.mem ? Promise.resolve([...this.mem.meta.values()]) : this.tx('meta','readonly', s => s.getAll()); },
+  getMeta(id){ return this.mem ? Promise.resolve(this.mem.meta.get(id)) : this.tx('meta','readonly', s => s.get(id)); },
+  putMeta(m){ if (this.mem){ this.mem.meta.set(m.id, {...m}); return Promise.resolve(); } return this.tx('meta','readwrite', s => s.put(m)); },
+  getText(id){ return this.mem ? Promise.resolve(this.mem.text.get(id)) : this.tx('text','readonly', s => s.get(id)); },
+  putText(id, t){ if (this.mem){ this.mem.text.set(id, t); return Promise.resolve(); } return this.tx('text','readwrite', s => s.put(t, id)); },
+  async del(id){
+    if (this.mem){ this.mem.meta.delete(id); this.mem.text.delete(id); return; }
+    await this.tx('meta','readwrite', s => s.delete(id)); await this.tx('text','readwrite', s => s.delete(id));
+  }
+};
+
+/* ---------- UI helpers ---------- */
+let toastT;
+function toast(msg, ms = 3500){
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastT); if (ms) toastT = setTimeout(() => t.classList.remove('show'), ms);
+}
+function fmtLeft(sec){
+  if (sec < 60) return 'under 1 min left';
+  const m = Math.round(sec/60); if (m < 60) return m + ' min left';
+  return Math.floor(m/60) + ' h ' + (m%60) + ' min left';
+}
+function applyTheme(){
+  document.documentElement.dataset.theme = S.theme;
+  document.querySelector('meta[name=theme-color]').content = S.theme === 'night' ? '#000000' : '#FFFFFF';
+  document.documentElement.style.setProperty('--fs', S.font + 'px');
+  $('rateBtn').textContent = S.rate.toFixed(S.rate*10 % 1 ? 2 : 1) + '×';
+}
+function loadScript(src){
+  return new Promise((res, rej) => {
+    if (document.querySelector(`script[src="${src}"]`)) return res();
+    const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Could not load ' + src));
+    document.head.appendChild(s);
+  });
+}
+
+/* ---------- Voices ---------- */
+let VOICES = [];
+const NOVELTY = /^(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Junior|Ralph|Kathy|Fred)\b/;
+const ELOQ = /^(Eddy|Flo|Grandma|Grandpa|Reed|Rocko|Sandy|Shelley)\b/;
+function loadVoices(){ if (HAS_TTS){ VOICES = speechSynthesis.getVoices(); if ($('dlgSettings').open) renderVoices(); if (VOICES.length) setTimeout(checkVoices, 500); } }
+function voiceScore(v){
+  const n = v.name + ' ' + v.voiceURI; let s = 0;
+  if (/Natural|Neural|Online/i.test(n)) s += 10;
+  if (/premium/i.test(n)) s += 8;
+  if (/enhanced/i.test(n)) s += 6;
+  if (/Google/i.test(n)) s += 2;
+  if (ELOQ.test(v.name)) s -= 6;
+  return s;
+}
+function voicesFor(code){
+  return VOICES.filter(v => v.lang.replace('_','-').toLowerCase().startsWith(code) && !NOVELTY.test(v.name))
+               .sort((a,b) => voiceScore(b) - voiceScore(a));
+}
+function voiceFor(code){
+  const list = voicesFor(code);
+  return list.find(v => v.voiceURI === S.voices[code]) || list[0] || null;
+}
+
+/* ---------- Wake lock ---------- */
+const Wake = {
+  lock:null,
+  async on(){
+    if (!S.wake || !('wakeLock' in navigator) || this.lock) return;
+    try { this.lock = await navigator.wakeLock.request('screen'); this.lock.addEventListener('release', () => { this.lock = null; }); } catch {}
+  },
+  async off(){ try { if (this.lock) await this.lock.release(); } catch {} this.lock = null; }
+};
+
+/* ---------- Sleep timer ---------- */
+const Timer = {
+  mode:'off', remaining:0, active:false, expired:false,
+  arm(mode){
+    this.mode = mode; this.expired = false; this.active = mode !== 'off';
+    this.remaining = /^\d+$/.test(mode) ? +mode * 60 : 0;
+    this.render();
+  },
+  disarm(){ this.mode = 'off'; this.active = false; this.expired = false; this.remaining = 0; this.render(); },
+  timed(){ return this.active && /^\d+$/.test(this.mode); },
+  tick(dt){
+    if (!this.timed() || this.expired) return;
+    this.remaining -= dt; if (this.remaining <= 0){ this.remaining = 0; this.expired = true; }
+    this.render();
+  },
+  volume(){ return (S.fade && this.timed() && this.remaining < 30) ? Math.max(0.25, this.remaining / 30) : 1; },
+  shouldStopAfter(i){
+    if (!this.active) return false;
+    if (this.mode === 'para'){ const s = P.model.sents; return i + 1 >= s.length || s[i+1].p !== s[i].p; }
+    return this.expired;
+  },
+  render(){
+    const b = $('timerBtn'), l = $('timerLabel');
+    b.classList.toggle('on', this.active);
+    if (this.timed()){ const r = Math.ceil(this.remaining); l.textContent = Math.floor(r/60) + ':' + String(r%60).padStart(2,'0'); }
+    else l.textContent = this.mode === 'para' && this.active ? '¶' : '';
+    b.setAttribute('aria-label', this.active ? 'Sleep timer on' : 'Sleep timer');
+  }
+};
+
+/* ---------- Player ---------- */
+const P = { doc:null, text:'', model:{paras:[], sents:[]}, idx:0, playing:false, finished:false,
+            gen:0, utter:null, uStart:0, uDone:true, uChars:0, retry:-1, spans:[], pEls:[], curP:null, userScrollAt:0, dragging:false,
+            toc:[], pages:null, skipP:new Set(), plan:null };
+
+function hardStop(){ P.gen++; P.uDone = true; if (HAS_TTS) speechSynthesis.cancel(); }
+
+function speakCurrent(){
+  if (P.skipP.has(P.model.sents[P.idx]?.p)){                 // landed in a skipped paragraph
+    const j = nextIdx(P.idx); if (j < 0) return endOfReading(); P.idx = j;
+  }
+  const s = P.model.sents[P.idx]; if (!s) return;
+  const g = ++P.gen;
+  highlight(); savePos();
+  const lang = P.model.paras[s.p].lang;
+  const u = new SpeechSynthesisUtterance(P.text.slice(s.s, s.e));
+  const v = voiceFor(lang);
+  if (v){ u.voice = v; u.lang = v.lang; } else u.lang = LANG_TAG[lang];
+  u.rate = S.rate; u.volume = Timer.volume();
+  u.onend = () => onUtterEnd(g);
+  u.onerror = e => { Diag.add('error ' + e.error + ' #' + P.idx); if (g !== P.gen || e.error === 'interrupted' || e.error === 'canceled') return; onUtterEnd(g); };
+  P.utter = u; P.uStart = Date.now(); P.uDone = false; P.uChars = u.text.length;
+  Diag.add('speak #' + P.idx + ' ' + lang + ' ' + (v ? v.name : 'default voice') + ' ' + u.text.length + ' chars');
+  speechSynthesis.speak(u);
+}
+function onUtterEnd(g){
+  if (g !== P.gen || P.uDone) return;
+  P.uDone = true;
+  if (!P.playing) return;
+  afterSentence();
+}
+// Next sentence to read, following the reading plan and skipping skipped paragraphs; -1 = nothing left.
+function nextIdx(i){
+  const S_ = P.model.sents, n = S_.length; let j = i + 1;
+  for (let guard = 0; guard < n + 10; guard++){
+    if (P.plan){
+      const r = P.plan.r[P.plan.k];
+      if (!r || j > r.b){ P.plan.k++; if (P.plan.k >= P.plan.r.length) return -1; j = P.plan.r[P.plan.k].a; }
+    }
+    if (j >= n) return -1;
+    if (P.skipP.has(S_[j].p)){ j = P.model.paras[S_[j].p].last + 1; continue; }
+    return j;
+  }
+  return -1;
+}
+function afterSentence(){
+  P.retry = -1;
+  if (Timer.shouldStopAfter(P.idx)){
+    const j = nextIdx(P.idx); if (j >= 0) P.idx = j;
+    pause(); Timer.disarm(); highlight(); savePos(true);
+    toast('Sleep timer: reading stopped');
+    return;
+  }
+  const j = nextIdx(P.idx);
+  if (j < 0) return endOfReading();
+  P.idx = j; speakCurrent();
+}
+function endOfReading(){
+  if (P.plan){
+    const label = P.plan.label, last = P.plan.r[P.plan.r.length-1].b;
+    endPlan(); P.idx = Math.min(P.model.sents.length - 1, last + 1);
+    pause(); highlight(); savePos(true); toast('Finished: ' + label);
+  } else { pause(); P.finished = true; toast('Finished reading'); }
+}
+function play(){
+  if (!P.doc || !P.model.sents.length) return;
+  if (!HAS_TTS){ toast('This browser has no speech support.'); return; }
+  $('resume').hidden = true;
+  if (P.finished){ P.idx = 0; P.finished = false; }
+  if (!Timer.active && S.timer !== 'off') Timer.arm(S.timer);
+  P.playing = true; setPlayIcon(); Wake.on();
+  P.userScrollAt = 0;
+  try { speechSynthesis.resume(); } catch {}
+  if (speechSynthesis.speaking || speechSynthesis.pending){ hardStop(); setTimeout(() => { if (P.playing) speakCurrent(); }, 80); }
+  else speakCurrent();    // synchronous: iOS needs speech to start inside the tap
+}
+function pause(){
+  P.playing = false; hardStop(); setPlayIcon(); Wake.off(); savePos(true);
+}
+function toggle(){ P.playing ? pause() : play(); }
+function jump(i){
+  const n = P.model.sents.length; if (!n) return;
+  P.idx = Math.max(0, Math.min(n-1, i)); P.finished = false;
+  if (P.plan){
+    const k = P.plan.r.findIndex(r => P.idx >= r.a && P.idx <= r.b);
+    if (k < 0){ endPlan(); toast('Selection cleared, reading normally', 1800); } else P.plan.k = k;
+  }
+  $('resume').hidden = true; P.userScrollAt = 0;
+  highlight(); savePos();
+  if (P.playing){ hardStop(); setTimeout(() => { if (P.playing) speakCurrent(); }, 80); }
+}
+function jumpPara(dir){
+  const s = P.model.sents[P.idx]; if (!s) return;
+  const para = P.model.paras[s.p];
+  if (dir < 0){
+    // first back-press goes to start of current paragraph, unless already there
+    if (P.idx > para.first) return jump(para.first);
+    for (let p = s.p - 1; p >= 0; p--) if (P.model.paras[p].last >= P.model.paras[p].first) return jump(P.model.paras[p].first);
+    return jump(0);
+  }
+  for (let p = s.p + 1; p < P.model.paras.length; p++) if (P.model.paras[p].last >= P.model.paras[p].first) return jump(P.model.paras[p].first);
+}
+function setPlayIcon(){
+  $('playIcon').innerHTML = P.playing ? '<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
+  $('play').setAttribute('aria-label', P.playing ? 'Pause' : 'Play');
+}
+
+/* Position saving (character offset → same position on any device) */
+let saveT;
+function savePos(now){
+  if (!P.doc) return;
+  const s = P.model.sents[P.idx]; if (!s) return;
+  P.doc.offset = s.s;
+  P.doc.plan = P.plan ? {label:P.plan.label, k:P.plan.k,
+    r:P.plan.r.map(r => ({s:P.model.sents[r.a].s, e:P.model.sents[r.b].e}))} : null;
+  clearTimeout(saveT);
+  const write = () => DB.putMeta(P.doc).catch(() => {});
+  if (now) write(); else saveT = setTimeout(write, 400);
+  updateProgress();
+}
+
+/* ---------- Rendering ---------- */
+function renderText(){
+  const box = $('text'); box.textContent = '';
+  const frag = document.createDocumentFragment(); P.spans = new Array(P.model.sents.length); P.pEls = [];
+  for (const para of P.model.paras){
+    const p = document.createElement('p'); p.lang = LANG_TAG[para.lang]; P.pEls.push(p);
+    let cur = para.s;
+    for (let i = para.first; i <= para.last; i++){
+      const s = P.model.sents[i];
+      if (s.s > cur) p.appendChild(document.createTextNode(P.text.slice(cur, s.s)));
+      const sp = document.createElement('span'); sp.dataset.i = i; sp.textContent = P.text.slice(s.s, s.e);
+      p.appendChild(sp); P.spans[i] = sp; cur = s.e;
+    }
+    if (para.e > cur) p.appendChild(document.createTextNode(P.text.slice(cur, para.e)));
+    frag.appendChild(p);
+  }
+  box.appendChild(frag);
+  $('prog').max = Math.max(0, P.model.sents.length - 1);
+  decorate();
+}
+// Paragraph/sentence marks: chapter headings, skipped paragraphs, block start/end.
+function decorate(){
+  const heads = new Set(P.toc.map(t => t.p));
+  P.pEls.forEach((el, i) => { el.classList.toggle('head', heads.has(i)); el.classList.toggle('skipped', P.skipP.has(i)); });
+  $('text').querySelectorAll('.bs,.be').forEach(el => el.classList.remove('bs','be'));
+  for (const b of (P.doc?.blocks || [])){
+    const a = P.spans[idxFromOffset(P.model.sents, b.s)]; if (a) a.classList.add('bs');
+    if (b.e != null){ const z = P.spans[idxFromOffset(P.model.sents, b.e - 1)]; if (z) z.classList.add('be'); }
+  }
+}
+let curSpan = null;
+function highlight(scroll = true){
+  if (curSpan) curSpan.classList.remove('cur');
+  if (P.curP) P.curP.classList.remove('curp');
+  curSpan = P.spans[P.idx] || null;
+  if (!curSpan) return;
+  curSpan.classList.add('cur'); P.curP = curSpan.parentElement; P.curP.classList.add('curp');
+  const ch = currentChapter(); $('where').textContent = ch ? ch.title : '';
+  if (scroll && Date.now() - P.userScrollAt > 6000) scrollToCurrent();
+  updateFollow();
+}
+let progScrollAt = 0;
+function scrollToCurrent(smooth = true){
+  if (!curSpan) return; progScrollAt = Date.now();
+  const rm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  curSpan.scrollIntoView({block:'center', behavior: smooth && !rm ? 'smooth' : 'auto'});
+}
+function updateFollow(){
+  const btn = $('follow');
+  if (!curSpan || Date.now() - P.userScrollAt > 6000){ btn.hidden = true; return; }
+  const r = curSpan.getBoundingClientRect(), box = $('reader').getBoundingClientRect();
+  btn.hidden = r.bottom > box.top && r.top < box.bottom;
+}
+function updateProgress(){
+  const n = P.model.sents.length;
+  if (!n){ $('progLabel').textContent = ''; return; }
+  const i = P.dragging ? +$('prog').value : P.idx;
+  if (!P.dragging) $('prog').value = P.idx;
+  const off = P.model.sents[i].s, len = P.text.length || 1;
+  const pct = Math.round(100 * off / len);
+  const pg = P.pages ? 'p. ' + (sortedIdx(P.pages, off) + 1 || 1) + '/' + P.pages.length + ', ' : '';
+  $('progLabel').textContent = pg + pct + '%, ' + fmtLeft((len - off) / (14.5 * S.rate));
+}
+
+/* ---------- Chapters, plans, blocks ---------- */
+function paraIdxAt(off){ // paragraph containing character offset
+  const ps = P.model.paras; let lo = 0, hi = ps.length - 1, ans = 0;
+  while (lo <= hi){ const m = (lo+hi) >> 1; if (ps[m].s <= off){ ans = m; lo = m+1; } else hi = m-1; }
+  return ans;
+}
+function computeToc(){
+  const m = P.doc, text = P.text;
+  const src = (m.heads && m.heads.length) ? m.heads.map(h => ({...h, src:'doc'})) : autoHeads(text).map(h => ({...h, src:'auto'}));
+  const del = new Set(m.tocDel || []);
+  const byPara = new Map();
+  for (const h of src){ const p = paraIdxAt(h.off); const off = P.model.paras[p].s; if (!del.has(off) && !byPara.has(p)) byPara.set(p, {off, p, level:h.level, title:h.title, src:h.src}); }
+  for (const off of (m.tocAdd || [])){ const p = paraIdxAt(off); if (!byPara.has(p)) byPara.set(p, {off:P.model.paras[p].s, p, level:1, title:(t => t.length > 60 ? t.slice(0,58) + '…' : t)(P.text.slice(P.model.paras[p].s, P.model.paras[p].e)), src:'user'}); }
+  P.toc = [...byPara.values()].sort((a,b) => a.off - b.off);
+}
+function currentChapter(){
+  if (!P.toc.length || !P.model.sents[P.idx]) return null;
+  const off = P.model.sents[P.idx].s; let c = null;
+  for (const t of P.toc){ if (t.off <= off) c = t; else break; }
+  return c;
+}
+function chapterRange(t){
+  const i = P.toc.indexOf(t); let e = null;
+  for (let j = i + 1; j < P.toc.length; j++) if (P.toc[j].level <= t.level){ e = P.toc[j].off; break; }
+  return {s:t.off, e};
+}
+function endPlan(){ P.plan = null; if (P.doc) P.doc.plan = null; updatePlanBar(); }
+function updatePlanBar(){ $('planBar').hidden = !P.plan; if (P.plan) $('planLabel').textContent = 'Reading only: ' + P.plan.label; }
+function rangesToIdx(ranges){
+  const S_ = P.model.sents, n = S_.length;
+  return ranges.map(o => ({a:idxFromOffset(S_, o.s), b: o.e == null ? n - 1 : idxFromOffset(S_, Math.max(o.s, o.e - 1))}))
+               .filter(r => r.b >= r.a).sort((x,y) => x.a - y.a);
+}
+function startPlan(label, ranges){
+  const r = rangesToIdx(ranges);
+  if (!r.length){ toast('Nothing to read in that selection.'); return; }
+  P.plan = {label, r, k:0}; updatePlanBar();
+  P.idx = r[0].a; P.finished = false; $('resume').hidden = true; P.userScrollAt = 0;
+  highlight(); savePos(true);
+  if (P.playing){ hardStop(); setTimeout(() => { if (P.playing) speakCurrent(); }, 80); } else play();
+}
+function readFrom(off){ endPlan(); jump(idxFromOffset(P.model.sents, off)); if (!P.playing) play(); }
+
+function saveMeta(){ if (P.doc) DB.putMeta(P.doc).catch(() => {}); }
+function toggleChapter(p){
+  const m = P.doc, off = P.model.paras[p].s, t = P.toc.find(x => x.p === p);
+  m.tocAdd = m.tocAdd || []; m.tocDel = m.tocDel || [];
+  if (t){ if (t.src === 'user') m.tocAdd = m.tocAdd.filter(o => paraIdxAt(o) !== p); else m.tocDel.push(off); }
+  else { if (m.tocDel.includes(off)) m.tocDel = m.tocDel.filter(o => o !== off); else m.tocAdd.push(off); }
+  computeToc(); decorate(); highlight(false); saveMeta();
+}
+function toggleSkip(p){
+  const m = P.doc, off = P.model.paras[p].s; m.skips = m.skips || [];
+  if (P.skipP.has(p)){ P.skipP.delete(p); m.skips = m.skips.filter(o => o !== off); }
+  else { P.skipP.add(p); m.skips.push(off); }
+  decorate(); saveMeta();
+}
+function setBlockStart(i){
+  const off = P.model.sents[i].s, m = P.doc; m.blocks = m.blocks || [];
+  const ex = m.blocks.findIndex(b => b.s === off);
+  if (ex >= 0){ m.blocks.splice(ex, 1); toast('Start mark removed', 1500); }
+  else { m.blocks.push({s:off, e:null}); m.blocks.sort((a,b) => a.s - b.s); toast('Start set. Set an end, or the block reads to the end of the text.', 3000); }
+  decorate(); saveMeta();
+}
+function setBlockEnd(i){
+  const sent = P.model.sents[i], m = P.doc; m.blocks = m.blocks || [];
+  const atEnd = m.blocks.find(b => b.e === sent.e);
+  if (atEnd){ atEnd.e = null; toast('End mark removed', 1500); }
+  else {
+    const b = [...m.blocks].reverse().find(b => b.s <= sent.s);
+    if (!b){ toast('Set a start before this point first.'); return; }
+    b.e = sent.e; toast('Block saved. Find it under Contents.', 2500);
+  }
+  decorate(); saveMeta();
+}
+
+let menuIdx = 0;
+function openSentMenu(i){
+  menuIdx = i; const s = P.model.sents[i], p = s.p, m = P.doc;
+  $('sentQuote').textContent = '“' + P.text.slice(s.s, s.e) + '”';
+  $('mStart').textContent = (m.blocks || []).some(b => b.s === s.s) ? 'Remove start mark' : 'Set start here';
+  $('mEnd').textContent = (m.blocks || []).some(b => b.e === s.e) ? 'Remove end mark' : 'Set end here';
+  $('mChap').textContent = P.toc.some(t => t.p === p) ? 'Remove chapter mark' : 'Mark paragraph as chapter';
+  $('mSkip').textContent = P.skipP.has(p) ? 'Read this paragraph again' : 'Skip this paragraph';
+  openDialog($('dlgSent'));
+}
+function renderToc(){
+  const ul = $('tocList'); ul.textContent = '';
+  const cur = currentChapter();
+  $('tocEmpty').hidden = P.toc.length > 0;
+  for (const t of P.toc){
+    const li = document.createElement('li'); li.className = 'lv' + t.level + (t === cur ? ' cur' : '');
+    const b = document.createElement('button'); b.className = 'tocbtn'; b.textContent = t.title;
+    if (P.pages){ const pg = document.createElement('span'); pg.className = 'pg'; pg.textContent = 'p. ' + (sortedIdx(P.pages, t.off) + 1 || 1); b.appendChild(pg); }
+    b.onclick = () => { $('dlgToc').close(); readFrom(t.off); };
+    const o = document.createElement('button'); o.className = 'only'; o.textContent = 'Only this';
+    o.setAttribute('aria-label', 'Read only ' + t.title);
+    o.onclick = () => { $('dlgToc').close(); startPlan(t.title, [chapterRange(t)]); };
+    li.append(b, o); ul.appendChild(li);
+  }
+  $('pageBox').hidden = !P.pages;
+  if (P.pages){ for (const id of ['goPage','pgFrom','pgTo']) $(id).max = P.pages.length;
+    const cp = sortedIdx(P.pages, P.model.sents[P.idx]?.s || 0) + 1 || 1; $('goPage').placeholder = cp; }
+  const bl = $('blockList'); bl.textContent = '';
+  const blocks = P.doc.blocks || [];
+  $('blockEmpty').hidden = blocks.length > 0; $('blockActions').hidden = !blocks.length;
+  blocks.forEach((b, n) => {
+    const li = document.createElement('li');
+    const btn = document.createElement('button'); btn.className = 'tocbtn';
+    const from = P.text.slice(b.s, b.s + 50).split('\n')[0];
+    btn.textContent = (n+1) + '. ' + from + '…  ' + (b.e == null ? '(to the end)' : '(' + Math.max(1, Math.round((b.e - b.s) / 1000)) + 'k chars)');
+    btn.onclick = () => { $('dlgToc').close(); startPlan('Block ' + (n+1), [b]); };
+    const del = document.createElement('button'); del.className = 'iconbtn'; del.setAttribute('aria-label', 'Remove block ' + (n+1));
+    del.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+    del.onclick = () => { P.doc.blocks.splice(n, 1); saveMeta(); decorate(); renderToc(); };
+    li.append(btn, del); bl.appendChild(li);
+  });
+}
+
+/* ---------- Documents ---------- */
+// opts: {src:'pdf'|'docx'|'txt'|'paste', outline:[{title,page,level}]}
+async function addDocument(title, raw, opts = {}){
+  const st = extractMarks(normalize(raw || ''));
+  const text = st.text;
+  if (!text){ toast('No readable text found.'); return; }
+  let heads = st.heads;
+  if (opts.outline && opts.outline.length && st.pages.length) heads = mapOutline(opts.outline, st.pages, text);
+  const struct = {v:2, src:opts.src || 'txt', pages: st.pages.length ? st.pages : null, heads};
+  const id = makeId(text);
+  const ex = await DB.getMeta(id);
+  if (ex){
+    Object.assign(ex, struct);
+    if (!ex.hasText){ await DB.putText(id, text); ex.hasText = true; toast('Text attached. Your saved position is kept.'); }
+    else toast('Already in your library.');
+    await DB.putMeta(ex);
+    return openDoc(id);
+  }
+  const meta = {id, title: (title || text.split('\n')[0]).slice(0, 120), len:text.length, offset:0, created:Date.now(), opened:Date.now(), lang:'auto', hasText:true, ...struct};
+  // Same file added in version 1 (read slightly differently)? Carry its position and marks over.
+  const old = (await DB.allMeta()).find(m => (m.v || 1) < 2 && m.hasText && m.title === meta.title && m.id !== id);
+  let migrated = false;
+  if (old){
+    const oldText = await DB.getText(old.id);
+    if (oldText){
+      meta.offset = mapOffset(oldText, text, old.offset || 0);
+      meta.lang = old.lang || 'auto'; meta.created = old.created || meta.created;
+      await DB.del(old.id); migrated = true;
+    }
+  }
+  await DB.putText(id, text); await DB.putMeta(meta);
+  requestPersist();
+  if (migrated) toast('Updated from the earlier version. Your position is kept.', 3500);
+  return openDoc(id, {askResume:migrated});
+}
+// Find the same passage in a re-read text; fall back to the same relative position.
+function mapOffset(oldText, newText, off){
+  const flatNew = newText.replace(/\n/g, ' ');        // same length, so indexes stay valid
+  for (const len of [80, 40, 20]){
+    const snip = oldText.slice(off, off + len).replace(/\s+/g, ' ').trim(); if (snip.length < 10) continue;
+    const i = flatNew.indexOf(snip); if (i >= 0) return i;
+  }
+  return Math.round(off / (oldText.length || 1) * newText.length);
+}
+// PDF bookmarks → heading offsets (snap to the bookmark title on its page if found).
+function mapOutline(outline, pages, text){
+  const res = [];
+  for (const o of outline){
+    const ps = pages[Math.min(o.page, pages.length - 1)] ?? 0, pe = pages[o.page + 1] ?? text.length;
+    const want = o.title.toLowerCase().replace(/\s+/g,' ').trim().slice(0, 40);
+    const i = want ? text.slice(ps, Math.max(pe, ps + 2000)).toLowerCase().indexOf(want) : -1;
+    const pos = i >= 0 ? ps + i : ps;
+    res.push({off: text.lastIndexOf('\n', pos - 1) + 1, level:o.level, title:o.title.slice(0,100)});
+  }
+  return res;
+}
+async function openDoc(id, {askResume = true} = {}){
+  if (P.playing) pause();
+  const meta = await DB.getMeta(id); if (!meta) return;
+  const text = await DB.getText(id);
+  if (text == null){ toast('This document’s text is not on this device. Open the original file to attach it.', 5000); return; }
+  P.doc = meta; P.text = text; P.finished = false; P.plan = null;
+  P.model = buildModel(text, meta.lang);
+  P.pages = meta.pages && meta.pages.length > 1 ? meta.pages : null;
+  P.skipP = new Set((meta.skips || []).map(paraIdxAt));
+  computeToc();
+  if (meta.plan && meta.plan.r && meta.plan.r.length){
+    const r = rangesToIdx(meta.plan.r);
+    if (r.length) P.plan = {label:meta.plan.label, r, k:Math.min(meta.plan.k || 0, r.length - 1)};
+  }
+  updatePlanBar();
+  $('empty').hidden = true; $('text').hidden = false;
+  $('docTitle').textContent = meta.title;
+  renderText();
+  P.idx = idxFromOffset(P.model.sents, meta.offset || 0);
+  curSpan = null; P.curP = null; highlight(false);
+  requestAnimationFrame(() => scrollToCurrent(false));
+  meta.opened = Date.now(); DB.putMeta(meta).catch(() => {});
+  S.lastDoc = id; saveS(); updateProgress();
+  if (askResume && P.idx > 0){
+    const ch = currentChapter();
+    $('resumeLabel').textContent = 'Saved at ' + Math.round(100 * meta.offset / text.length) + '%' + (ch ? ', ' + ch.title.slice(0, 40) : '');
+    $('resume').hidden = false;
+  } else $('resume').hidden = true;
+  checkVoices();
+}
+function closeDoc(){
+  if (P.playing) pause();
+  P.doc = null; P.text = ''; P.model = {paras:[], sents:[]}; P.spans = [];
+  $('text').textContent = ''; $('text').hidden = true; $('empty').hidden = false; $('resume').hidden = true;
+  P.toc = []; P.pages = null; P.skipP = new Set(); P.plan = null; updatePlanBar(); $('where').textContent = '';
+  $('docTitle').textContent = 'Read Aloud'; S.lastDoc = null; saveS(); updateProgress();
+}
+
+/* ---------- File reading ---------- */
+async function readFile(f){
+  const ext = (f.name.split('.').pop() || '').toLowerCase();
+  const title = f.name.replace(/\.[^.]+$/, '');
+  try {
+    let res;
+    if (ext === 'pdf') res = await readPdf(f);
+    else if (ext === 'docx') res = {text: await readDocx(f), src:'docx'};
+    else if (ext === 'doc') { toast('Old .doc files are not supported. Save it as .docx or PDF first.', 5000); return; }
+    else res = {text: (await f.text()).replace(MK,''), src:'txt'};
+    if (res && res.text != null) await addDocument(title, res.text, res);
+  } catch (e) { console.error(e); toast('Could not read ' + f.name + ': ' + (e.message || e), 6000); }
+}
+async function readDocx(f){
+  toast('Reading ' + f.name + '…', 0);
+  await loadScript('lib/mammoth.browser.min.js');
+  const r = await mammoth.convertToHtml({arrayBuffer: await f.arrayBuffer()});
+  const dom = new DOMParser().parseFromString(r.value, 'text/html');
+  const lines = [];
+  const walk = el => {
+    for (const c of el.children){
+      const t = c.tagName;
+      if (/^H[1-6]$/.test(t)) lines.push(String.fromCharCode(0xE000 + Math.min(3, +t[1])) + c.textContent);
+      else if (t === 'P') lines.push(c.textContent);
+      else if (t === 'LI'){ const k = c.cloneNode(true); k.querySelectorAll('ul,ol').forEach(x => x.remove()); lines.push(k.textContent); c.querySelectorAll(':scope > ul, :scope > ol').forEach(walk); }
+      else if (t === 'TABLE') c.querySelectorAll('tr').forEach(tr => lines.push([...tr.children].map(td => td.textContent.trim()).filter(Boolean).join(', ')));
+      else walk(c);
+    }
+  };
+  walk(dom.body);
+  toast('Added ' + f.name);
+  return lines.join('\n');
+}
+async function readPdf(f){
+  toast('Reading ' + f.name + '…', 0);
+  await loadScript('lib/pdf.min.js');
+  // Opened from disk: browsers block web workers, so run the PDF engine on the main thread.
+  if (location.protocol === 'file:') await loadScript('lib/pdf.worker.min.js');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
+  const pdf = await pdfjsLib.getDocument({data: new Uint8Array(await f.arrayBuffer()), isEvalSupported:false}).promise;
+  const paras = [];
+  let para = '', mark = false;
+  const flush = () => { if (para.trim()){ paras.push((mark ? '\uE000' : '') + para.trim()); mark = false; } para = ''; };
+  const outline = [];
+  try {
+    const walkOl = async (items, lv) => {
+      for (const it of items || []){
+        if (lv <= 3 && it.title){
+          try {
+            let d = it.dest; if (typeof d === 'string') d = await pdf.getDestination(d);
+            if (Array.isArray(d) && d[0] != null){
+              const page = typeof d[0] === 'number' ? d[0] : await pdf.getPageIndex(d[0]);
+              outline.push({title:it.title.trim(), page, level:lv});
+            }
+          } catch {}
+        }
+        await walkOl(it.items, lv + 1);
+      }
+    };
+    await walkOl(await pdf.getOutline(), 1);
+  } catch {}
+  for (let pn = 1; pn <= pdf.numPages; pn++){
+    mark = true;
+    toast('Reading page ' + pn + ' of ' + pdf.numPages + '…', 0);
+    const page = await pdf.getPage(pn);
+    const tc = await page.getTextContent();
+    const lines = []; let cur = '', curY = null, curH = 0, endX = null, startX = 0;
+    const push = () => { if (cur.trim()) lines.push({t:cur.replace(/\s+/g,' ').trim(), y:curY, h:curH, x0:startX, x1:endX}); cur = ''; endX = null; };
+    for (const it of tc.items){
+      if (!('str' in it)) continue;
+      const x = it.transform[4], y = it.transform[5], h = Math.abs(it.transform[3]) || it.height || 10;
+      if (curY !== null && Math.abs(y - curY) > h * 0.5) push();
+      if (!cur) { curY = y; curH = h; startX = x; }
+      if (endX !== null && it.str && !/\s$/.test(cur) && !/^\s/.test(it.str) && x - endX > h * 0.15) cur += ' ';
+      cur += it.str; endX = x + (it.width || 0);
+      if (it.hasEOL) push();
+    }
+    push();
+    const body = lines.filter(l => !/^\d{1,4}$/.test(l.t));        // drop bare page numbers
+    const gaps = []; for (let i = 1; i < body.length; i++){ const g = body[i-1].y - body[i].y; if (g > 0) gaps.push(g); }
+    gaps.sort((a,b) => a-b); const med = gaps.length ? gaps[gaps.length >> 1] : 0;
+    // typical left and right edges of full text lines on this page
+    const xs = body.map(l => l.x1).filter(v => v != null).sort((a,b) => a-b);
+    const right = xs.length ? xs[Math.floor(xs.length * 0.8)] : 0;
+    const lefts = body.map(l => l.x0).sort((a,b) => a-b);
+    const left = lefts.length ? lefts[lefts.length >> 2] : 0;
+    body.forEach((l, i) => {
+      if (i > 0){
+        const prev = body[i-1], g = prev.y - l.y;
+        const shortEnd = right && prev.x1 != null && /[.!?…:"”»)]$/.test(prev.t) && prev.x1 < right - (right - left) * 0.12;
+        const indent = l.x0 > left + l.h * 1.2 && Math.abs(prev.x0 - left) < l.h * 0.5;
+        if (g < 0 || (med && g > med * 1.45) || shortEnd || indent) flush();
+      }
+      para = para ? joinLine(para, l.t) : l.t;
+    });
+    flush();               // normalize() re-joins paragraphs that continue across pages
+    if (mark){ paras.push('\uE000'); mark = false; }   // page without text still counts as a page
+    page.cleanup();
+  }
+  if (!paras.some(p => p.replace(MK,'').trim())){ toast('This PDF has no text layer (probably a scanned image). Run OCR on it first.', 6000); return null; }
+  toast('Added ' + f.name);
+  return {text: paras.join('\n'), src:'pdf', outline};
+}
+
+/* ---------- Library ---------- */
+async function renderLibrary(){
+  const list = (await DB.allMeta()).sort((a,b) => (b.opened||0) - (a.opened||0));
+  const ul = $('libList'); ul.textContent = '';
+  $('libEmpty').hidden = list.length > 0;
+  for (const m of list){
+    const li = document.createElement('li'); if (P.doc && P.doc.id === m.id) li.className = 'active';
+    const pct = m.len ? Math.round(100 * (m.offset || 0) / m.len) : 0;
+    const b = document.createElement('button'); b.className = 'docbtn';
+    const t = document.createElement('span'); t.className = 't'; t.textContent = m.title;
+    const meta = document.createElement('span'); meta.className = 'm';
+    meta.textContent = m.hasText ? pct + '% read, opened ' + new Date(m.opened || m.created).toLocaleDateString(undefined, {day:'numeric', month:'short'})
+                                 : pct + '% saved. Text not on this device: open the original file to attach it.';
+    const bar = document.createElement('div'); bar.className = 'bar'; bar.innerHTML = `<i style="width:${pct}%"></i>`;
+    b.append(t, meta, bar);
+    b.onclick = () => { $('dlgLib').close(); if (m.hasText) openDoc(m.id); else { $('fileIn').click(); } };
+    const ren = document.createElement('button'); ren.className = 'iconbtn'; ren.setAttribute('aria-label', 'Rename ' + m.title);
+    ren.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>';
+    ren.onclick = async () => {
+      const n = prompt('New title', m.title); if (!n || !n.trim()) return;
+      m.title = n.trim(); await DB.putMeta(m); if (P.doc && P.doc.id === m.id){ P.doc.title = m.title; $('docTitle').textContent = m.title; }
+      renderLibrary();
+    };
+    const del = document.createElement('button'); del.className = 'iconbtn'; del.setAttribute('aria-label', 'Delete ' + m.title);
+    del.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/></svg>';
+    del.onclick = async () => {
+      if (!confirm('Delete “' + m.title + '” and its reading position?')) return;
+      if (P.doc && P.doc.id === m.id) closeDoc();
+      await DB.del(m.id); renderLibrary();
+    };
+    li.append(b, ren, del); ul.appendChild(li);
+  }
+}
+
+/* ---------- Backup export / import ---------- */
+let exportFile = null;
+async function buildExport(){
+  $('expSave').disabled = true; $('expInfo').textContent = 'Preparing…';
+  const withText = $('expTexts').checked;
+  const metas = await DB.allMeta(); const docs = [];
+  for (const m of metas){
+    const d = {id:m.id, title:m.title, len:m.len, offset:m.offset||0, created:m.created, opened:m.opened, lang:m.lang||'auto',
+               v:m.v, src:m.src, pages:m.pages, heads:m.heads, tocAdd:m.tocAdd, tocDel:m.tocDel, skips:m.skips, blocks:m.blocks, plan:m.plan};
+    if (withText && m.hasText){ const t = await DB.getText(m.id); if (t != null) d.text = t; }
+    docs.push(d);
+  }
+  const {voices, lastDoc, ...settings} = S;   // voices differ per device, so they stay local
+  const json = JSON.stringify({app:'readaloud', version:1, exported:new Date().toISOString(), settings, docs});
+  const name = 'readaloud-backup-' + new Date().toISOString().slice(0,10) + '.json';
+  exportFile = new File([json], name, {type:'application/json'});
+  const kb = json.length / 1024;
+  $('expInfo').textContent = docs.length + ' document' + (docs.length === 1 ? '' : 's') + ', ' + (kb > 1024 ? (kb/1024).toFixed(1) + ' MB' : Math.max(1, Math.round(kb)) + ' kB');
+  $('expSave').disabled = docs.length === 0;
+}
+async function saveExport(){
+  if (!exportFile) return;
+  if (IOS && navigator.canShare && navigator.canShare({files:[exportFile]})){
+    try { await navigator.share({files:[exportFile], title:exportFile.name}); S.lastBackup = Date.now(); saveS(); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(exportFile); a.download = exportFile.name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  S.lastBackup = Date.now(); saveS();
+}
+// Combine structure and user marks from an imported document into a local one.
+function mergeMarks(m, d){
+  const nums = a => Array.isArray(a) ? a.filter(x => Number.isFinite(x)) : [];
+  const uni = (a, b) => [...new Set([...nums(a), ...nums(b)])];
+  if (!m.pages && Array.isArray(d.pages)) m.pages = nums(d.pages);
+  if (!m.heads && Array.isArray(d.heads)) m.heads = d.heads.filter(h => h && Number.isFinite(h.off)).map(h => ({off:h.off, level:+h.level||1, title:String(h.title||'').slice(0,100)}));
+  if (!m.src && d.src) m.src = String(d.src);
+  if (d.v) m.v = Math.max(m.v || 1, +d.v || 1);
+  m.tocAdd = uni(m.tocAdd, d.tocAdd); m.tocDel = uni(m.tocDel, d.tocDel); m.skips = uni(m.skips, d.skips);
+  const blocks = [...(m.blocks || [])];
+  for (const b of (Array.isArray(d.blocks) ? d.blocks : [])) if (b && Number.isFinite(b.s) && !blocks.some(x => x.s === b.s)) blocks.push({s:b.s, e:Number.isFinite(b.e) ? b.e : null});
+  m.blocks = blocks.sort((a,b) => a.s - b.s);
+  return m;
+}
+async function importBackup(f){
+  let data;
+  try { data = JSON.parse(await f.text()); } catch { toast('That file is not a Read Aloud backup.'); return; }
+  if (!data || data.app !== 'readaloud' || !Array.isArray(data.docs)){ toast('That file is not a Read Aloud backup.'); return; }
+  const policy = $('impSeg').querySelector('[aria-pressed=true]').dataset.v;
+  let added = 0, moved = 0;
+  for (const d of data.docs){
+    if (!d || typeof d.id !== 'string') continue;
+    const text = (typeof d.text === 'string' && makeId(d.text) === d.id) ? d.text : null;
+    const ex = await DB.getMeta(d.id);
+    if (ex){
+      if ((policy === 'imported' && ex.offset !== d.offset) || (policy === 'furthest' && (d.offset||0) > (ex.offset||0))){ ex.offset = d.offset||0; moved++; }
+      if (!ex.hasText && text){ await DB.putText(d.id, text); ex.hasText = true; }
+      mergeMarks(ex, d);
+      await DB.putMeta(ex);
+    } else {
+      if (text) await DB.putText(d.id, text);
+      await DB.putMeta({id:d.id, title:String(d.title||'Untitled').slice(0,120), len:d.len||(text?text.length:0), offset:d.offset||0,
+                        created:d.created||Date.now(), opened:d.opened||Date.now(), lang:LANGS.includes(d.lang)?d.lang:'auto', hasText:!!text,
+                        ...mergeMarks({}, d)});
+      added++;
+    }
+  }
+  if (data.settings){
+    for (const k of ['theme','font','rate','wake','fade','timer']) if (k in data.settings) S[k] = data.settings[k];
+    saveS(); applyTheme();
+  }
+  $('dlgImport').close();
+  toast('Imported: ' + added + ' new document' + (added === 1 ? '' : 's') + ', ' + moved + ' position' + (moved === 1 ? '' : 's') + ' updated.', 5000);
+  if (P.doc && !P.playing){ const id = P.doc.id; await openDoc(id); }
+  if ($('dlgLib').open) renderLibrary();
+}
+
+/* ---------- Settings dialog ---------- */
+function renderSettings(){
+  $('themeSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === S.theme));
+  $('fontVal').textContent = S.font;
+  $('rateRange').value = S.rate; $('rateVal').textContent = S.rate.toFixed(2) + '×';
+  $('optWake').checked = S.wake; $('optFade').checked = S.fade;
+  $('wakeHint').textContent = ('wakeLock' in navigator)
+    ? (IOS ? 'On iPhone, reading stops if the phone locks, including when you press the side button.' : 'On a PC, reading continues when the screen locks.')
+    : 'This browser cannot keep the screen awake. On iPhone, reading stops when the screen locks.';
+  $('docLangField').hidden = !P.doc;
+  $('diagLog').textContent = Diag.lines.join('\n') || 'No events yet.';
+  if (P.doc) $('docLang').value = P.doc.lang || 'auto';
+  renderVoices();
+}
+function renderVoices(){
+  const box = $('voiceList'); box.textContent = '';
+  if (!HAS_TTS){ $('voiceHint').textContent = 'This browser has no speech support.'; return; }
+  let missing = [];
+  for (const code of LANGS){
+    const row = document.createElement('div'); row.className = 'voice';
+    const lab = document.createElement('label'); lab.textContent = LANG_NAME[code]; lab.htmlFor = 'v_' + code;
+    const sel = document.createElement('select'); sel.id = 'v_' + code;
+    const list = voicesFor(code); const chosen = voiceFor(code);
+    if (!list.length){ sel.innerHTML = '<option>No voice installed</option>'; sel.disabled = true; missing.push(LANG_NAME[code]); }
+    for (const v of list){ const o = document.createElement('option'); o.value = v.voiceURI; o.textContent = v.name + (v.localService ? '' : ' (online)'); if (chosen && v.voiceURI === chosen.voiceURI) o.selected = true; sel.appendChild(o); }
+    sel.onchange = () => { S.voices[code] = sel.value; saveS(); };
+    const test = document.createElement('button'); test.className = 'btn'; test.textContent = 'Test'; test.disabled = !list.length;
+    test.onclick = () => {
+      if (P.playing) pause();
+      hardStop();
+      const u = new SpeechSynthesisUtterance(SAMPLE[code]); const v = voiceFor(code);
+      if (v){ u.voice = v; u.lang = v.lang; } u.rate = S.rate; speechSynthesis.speak(u);
+    };
+    row.append(lab, sel, test); box.appendChild(row);
+  }
+  $('voiceHint').textContent = (missing.length ? 'Missing: ' + missing.join(', ') + '. ' : '') +
+    (IOS ? 'Add voices in Settings → Accessibility → Spoken Content → Voices. Enhanced and Premium voices sound best.'
+     : /Android/i.test(navigator.userAgent) ? 'Add voices in Android Settings → System → Languages → Text-to-speech → Speech Services by Google → Install voice data.'
+     : 'On Windows, Microsoft Edge offers natural online voices for all four languages.');
+}
+// PC only: suggest Edge when this document needs a voice the browser lacks.
+let edgeHinted = false;
+function checkVoices(){
+  if (MOBILE || EDGE || edgeHinted || !HAS_TTS || !VOICES.length || !P.doc) return;
+  const need = [...new Set(P.model.paras.map(p => p.lang))].filter(c => !voicesFor(c).length);
+  if (need.length){ edgeHinted = true; toast('No ' + need.map(c => LANG_NAME[c]).join(', ') + ' voice in this browser. Microsoft Edge has natural voices for all four languages.', 7000); }
+}
+
+/* ---------- Events ---------- */
+function openDialog(d){ d._openedAt = Date.now(); d.showModal(); }
+document.querySelectorAll('dialog').forEach(d => {
+  d.addEventListener('click', e => { if (e.target === d && Date.now() - (d._openedAt || 0) > 450) d.close(); });
+  d.querySelectorAll('[data-close]').forEach(b => b.onclick = () => d.close());
+});
+document.querySelectorAll('[data-act]').forEach(b => b.onclick = () => {
+  $('dlgLib').close();
+  if (b.dataset.act === 'paste'){ $('pasteTitle').value = ''; $('pasteText').value = ''; openDialog($('dlgPaste')); setTimeout(() => $('pasteText').focus(), 50); }
+  else $('fileIn').click();
+});
+$('pasteSave').onclick = async () => { const t = $('pasteText').value; if (!t.trim()) return; $('dlgPaste').close(); await addDocument($('pasteTitle').value.trim(), t.replace(MK,''), {src:'paste'}); };
+$('fileIn').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) readFile(f); };
+$('btnLib').onclick = () => { renderLibrary(); openDialog($('dlgLib')); };
+$('btnSettings').onclick = () => { renderSettings(); openDialog($('dlgSettings')); };
+
+$('play').onclick = toggle;
+$('prevSent').onclick = () => jump(P.idx - 1);
+$('nextSent').onclick = () => jump(P.idx + 1);
+$('prevPara').onclick = () => jumpPara(-1);
+$('nextPara').onclick = () => jumpPara(1);
+$('resumeGo').onclick = () => { $('resume').hidden = true; play(); };
+$('resumeStart').onclick = () => { jump(0); play(); };
+$('follow').onclick = () => { P.userScrollAt = 0; scrollToCurrent(); $('follow').hidden = true; };
+
+const RATES = [0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
+$('rateBtn').onclick = () => {
+  const i = RATES.findIndex(r => r > S.rate + 0.001); S.rate = i < 0 ? RATES[0] : RATES[i];
+  saveS(); applyTheme(); updateProgress(); toast('Speed ' + S.rate + '×', 1200);
+};
+let lp = null, lpFired = false;
+const textEl = $('text');
+textEl.addEventListener('click', e => {
+  if (lpFired){ lpFired = false; return; }
+  const sp = e.target.closest('span[data-i]'); if (sp) jump(+sp.dataset.i);
+});
+textEl.addEventListener('pointerdown', e => {
+  if (e.pointerType === 'mouse') return;
+  const sp = e.target.closest('span[data-i]'); if (!sp) return;
+  lpFired = false;
+  lp = {x:e.clientX, y:e.clientY, t:setTimeout(() => { lp = null; lpFired = true; openSentMenu(+sp.dataset.i); }, 550)};
+});
+textEl.addEventListener('pointermove', e => { if (lp && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 10){ clearTimeout(lp.t); lp = null; } });
+['pointerup','pointercancel'].forEach(ev => textEl.addEventListener(ev, () => { if (lp){ clearTimeout(lp.t); lp = null; } }));
+textEl.addEventListener('contextmenu', e => {
+  const sp = e.target.closest('span[data-i]'); if (!sp) return;
+  e.preventDefault();
+  if (!$('dlgSent').open) openSentMenu(+sp.dataset.i);
+});
+$('mRead').onclick = () => { $('dlgSent').close(); readFrom(P.model.sents[menuIdx].s); };
+$('mStart').onclick = () => { $('dlgSent').close(); setBlockStart(menuIdx); };
+$('mEnd').onclick = () => { $('dlgSent').close(); setBlockEnd(menuIdx); };
+$('mChap').onclick = () => { $('dlgSent').close(); toggleChapter(P.model.sents[menuIdx].p); };
+$('mSkip').onclick = () => { $('dlgSent').close(); toggleSkip(P.model.sents[menuIdx].p); };
+
+// Contents
+$('btnToc').onclick = () => { if (!P.doc){ toast('Open a document first.'); return; } renderToc(); openDialog($('dlgToc')); };
+const pageNum = id => { const v = parseInt($(id).value, 10); return Number.isFinite(v) && P.pages ? Math.max(1, Math.min(P.pages.length, v)) : null; };
+$('goPageBtn').onclick = () => { const n = pageNum('goPage'); if (!n) return; $('dlgToc').close(); endPlan(); jump(idxFromOffset(P.model.sents, P.pages[n-1])); };
+$('pgRead').onclick = () => {
+  let a = pageNum('pgFrom'), b = pageNum('pgTo') || a; if (!a) return; if (b < a) [a, b] = [b, a];
+  $('dlgToc').close(); startPlan(a === b ? 'Page ' + a : 'Pages ' + a + '–' + b, [{s:P.pages[a-1], e:P.pages[b] ?? null}]);
+};
+$('blocksRead').onclick = () => { $('dlgToc').close(); startPlan('Reading blocks', P.doc.blocks || []); };
+$('blocksClear').onclick = () => { if (!confirm('Remove all reading blocks in this document?')) return; P.doc.blocks = []; saveMeta(); decorate(); renderToc(); };
+$('planStop').onclick = () => { endPlan(); savePos(true); toast('Reading normally', 1200); };
+$('diagCopy').onclick = async () => { try { await navigator.clipboard.writeText(Diag.lines.join('\n')); toast('Log copied', 1200); } catch { toast('Copy failed. Select the text instead.'); } };
+
+const prog = $('prog');
+prog.addEventListener('input', () => { P.dragging = true; updateProgress(); });
+prog.addEventListener('change', () => { P.dragging = false; jump(+prog.value); });
+
+['wheel','touchmove'].forEach(ev => $('reader').addEventListener(ev, () => { P.userScrollAt = Date.now(); }, {passive:true}));
+$('reader').addEventListener('scroll', updateFollow, {passive:true});
+
+// Timer dialog
+function renderTimerDlg(){
+  $('timerOpts').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.t === (Timer.active ? Timer.mode : S.timer)));
+  $('timerActive').hidden = !Timer.active;
+  $('timerAdd').hidden = !Timer.timed();
+  $('timerState').textContent = Timer.timed() ? 'Stops in ' + Math.ceil(Timer.remaining/60) + ' min of reading.'
+    : Timer.active ? 'Stops at the end of the current paragraph.'
+    : S.timer !== 'off' ? 'Starts when you press play.' : 'No timer set.';
+}
+$('timerBtn').onclick = () => { renderTimerDlg(); openDialog($('dlgTimer')); };
+$('timerOpts').addEventListener('click', e => {
+  const b = e.target.closest('button[data-t]'); if (!b) return;
+  S.timer = b.dataset.t; saveS();
+  if (S.timer === 'off') Timer.disarm(); else Timer.arm(S.timer);
+  $('dlgTimer').close();
+  if (S.timer !== 'off') toast(S.timer === 'para' ? 'Stops at end of paragraph' : 'Sleep timer: ' + S.timer + ' min', 1500);
+});
+$('timerAdd').onclick = () => { Timer.remaining += 300; Timer.expired = false; Timer.render(); renderTimerDlg(); };
+$('timerCancel').onclick = () => { Timer.disarm(); $('dlgTimer').close(); };
+
+// Settings controls
+$('themeSeg').onclick = e => { const b = e.target.closest('button[data-v]'); if (!b) return; S.theme = b.dataset.v; saveS(); applyTheme(); renderSettings(); };
+$('fontSeg').onclick = e => { const b = e.target.closest('button[data-d]'); if (!b) return; S.font = Math.max(14, Math.min(36, S.font + +b.dataset.d)); saveS(); applyTheme(); renderSettings(); };
+$('rateRange').oninput = () => { S.rate = +$('rateRange').value; $('rateVal').textContent = S.rate.toFixed(2) + '×'; saveS(); applyTheme(); updateProgress(); };
+$('optWake').onchange = () => { S.wake = $('optWake').checked; saveS(); if (S.wake && P.playing) Wake.on(); else if (!S.wake) Wake.off(); };
+$('optFade').onchange = () => { S.fade = $('optFade').checked; saveS(); };
+$('docLang').onchange = () => {
+  if (!P.doc) return; const was = P.playing; if (was) pause();
+  P.doc.lang = $('docLang').value; DB.putMeta(P.doc);
+  P.model = buildModel(P.text, P.doc.lang); renderText(); curSpan = null; P.curP = null; highlight(false);
+  if (was) play();
+};
+
+// Backup
+$('btnExport').onclick = () => { $('dlgLib').close(); exportFile = null; openDialog($('dlgExport')); buildExport(); };
+$('expTexts').onchange = buildExport;
+$('expSave').onclick = saveExport;
+$('btnImport').onclick = () => { $('dlgLib').close(); openDialog($('dlgImport')); };
+$('impSeg').onclick = e => { const b = e.target.closest('button[data-v]'); if (!b) return; $('impSeg').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); };
+$('impChoose').onclick = () => $('importIn').click();
+$('importIn').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) importBackup(f); };
+
+// Keyboard (PC)
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input,textarea,select,dialog') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.code === 'Space'){ e.preventDefault(); toggle(); }
+  else if (e.key === 'ArrowRight'){ e.preventDefault(); e.shiftKey ? jumpPara(1) : jump(P.idx + 1); }
+  else if (e.key === 'ArrowLeft'){ e.preventDefault(); e.shiftKey ? jumpPara(-1) : jump(P.idx - 1); }
+});
+
+// Drag and drop (PC)
+let dragDepth = 0;
+addEventListener('dragenter', e => { if ([...e.dataTransfer.types].includes('Files')){ dragDepth++; $('drop').classList.add('show'); } });
+addEventListener('dragleave', () => { if (--dragDepth <= 0){ dragDepth = 0; $('drop').classList.remove('show'); } });
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => {
+  e.preventDefault(); dragDepth = 0; $('drop').classList.remove('show');
+  const f = e.dataTransfer.files[0]; if (!f) return;
+  if (/\.json$/i.test(f.name)) importBackup(f); else readFile(f);
+});
+
+// Page lifecycle
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden'){
+    savePos(true);
+    Diag.add('page hidden' + (P.playing ? ' while playing' : ''));
+    if (MOBILE && P.playing) pause();  // phones stop speech in the background; pause cleanly at this sentence
+  } else { Diag.add('page visible'); if (P.playing) Wake.on(); }
+});
+addEventListener('pagehide', () => savePos(true));
+
+// Clock: sleep timer + watchdog for speech engines that miss the "end" event
+let lastTick = Date.now();
+setInterval(() => {
+  const now = Date.now(), dt = (now - lastTick) / 1000; lastTick = now;
+  if (P.playing) Timer.tick(dt);
+  if (P.playing && !P.uDone && document.visibilityState === 'visible'){
+    const el = now - P.uStart;
+    if (el > 2500 && !speechSynthesis.speaking && !speechSynthesis.pending){ Diag.add('watchdog: engine idle, no end event #' + P.idx); onUtterEnd(P.gen); }
+    else {
+      const expected = P.uChars / (14.5 * S.rate);                  // seconds
+      if (el > Math.max(8000, (expected * 2.5 + 3) * 1000)){
+        if (P.retry === P.idx){ Diag.add('stall again, skipping #' + P.idx); P.retry = -1; hardStop(); afterSentence(); }
+        else { Diag.add('stall, restarting #' + P.idx); P.retry = P.idx; hardStop(); setTimeout(() => { if (P.playing) speakCurrent(); }, 80); }
+      }
+    }
+  }
+}, 1000);
+
+function requestPersist(){
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persisted().then(p => { if (!p) navigator.storage.persist().then(ok => Diag.add('persistent storage ' + (ok ? 'granted' : 'not granted'))); }); } catch {}
+}
+/* ---------- Start ---------- */
+(async function init(){
+  applyTheme(); Timer.render();
+  if (HAS_TTS){ loadVoices(); speechSynthesis.addEventListener ? speechSynthesis.addEventListener('voiceschanged', loadVoices) : (speechSynthesis.onvoiceschanged = loadVoices); }
+  if (!S.firstUse){ S.firstUse = Date.now(); saveS(); }
+  await DB.open();
+  if (S.lastDoc && await DB.getMeta(S.lastDoc)) await openDoc(S.lastDoc);
+  requestPersist();
+  const metas = await DB.allMeta();
+  if (metas.length && Date.now() - (S.lastBackup || S.firstUse) > 30 * 864e5)
+    setTimeout(() => toast('No backup in over 30 days. Export one from the Library.', 6000), 1500);
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+</script>
+</body>
+</html>
