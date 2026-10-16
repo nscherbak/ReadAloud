@@ -50,6 +50,8 @@ svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-l
 #where{font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:15px}
 .iconbtn{width:44px;height:44px;display:grid;place-items:center;color:var(--ink)}
 .iconbtn:active{background:var(--btn)}
+.top .iconbtn{width:auto;min-width:54px;height:auto;padding:4px 4px 3px;display:flex;flex-direction:column;align-items:center;gap:1px}
+.top .iconbtn span{font-size:11px;line-height:1.1;color:var(--dim)}
 
 /* Reading area */
 #reader{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;position:relative}
@@ -59,6 +61,8 @@ svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-l
   -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
 }
 #text p.head{font-weight:700}
+#text p.li{padding-left:calc(14px + var(--lv,0) * 1.4em)}
+#text p.li + p:not(.li){margin-top:1.2em}
 #text p.skipped{opacity:.38}
 #text span.bs::before{content:"⟦";color:var(--lamp);font-weight:700;margin-right:3px}
 #text span.be::after{content:"⟧";color:var(--lamp);font-weight:700;margin-left:3px}
@@ -187,14 +191,14 @@ details pre{white-space:pre-wrap;font-size:11px;max-height:40dvh;overflow:auto;b
 
 <header class="top">
   <button class="iconbtn" id="btnLib" aria-label="Library">
-    <svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10"/></svg>
+    <svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10"/></svg><span>Menu</span>
   </button>
   <div class="titles"><h1 id="docTitle">Read Aloud</h1><div id="where"></div></div>
   <button class="iconbtn" id="btnToc" aria-label="Contents and reading blocks">
-    <svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>
+    <svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg><span>Contents</span>
   </button>
   <button class="iconbtn" id="btnSettings" aria-label="Settings">
-    <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+    <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span>Settings</span>
   </button>
 </header>
 
@@ -316,6 +320,23 @@ details pre{white-space:pre-wrap;font-size:11px;max-height:40dvh;overflow:auto;b
       <p class="hint" id="wakeHint"></p>
       <label class="switch"><span>Fade out at end of sleep timer</span><input type="checkbox" id="optFade"></label>
     </div>
+    <div class="field"><label for="optLines">Read line numbers</label>
+      <select id="optLines">
+        <option value="off">No</option>
+        <option value="para">At the start of each paragraph</option>
+        <option value="sent">At the start of each sentence</option>
+      </select>
+      <p class="hint" id="linesHint"></p>
+    </div>
+    <div class="field"><label for="optList">Lists</label>
+      <select id="optList">
+        <option value="mixed">Numbers spoken, click for bullets</option>
+        <option value="announce">Announce every item</option>
+        <option value="click">Gentle click before every item</option>
+        <option value="plain">Short pause only</option>
+      </select>
+      <div class="pagerow"><label for="clickVol">Click volume</label><input type="range" id="clickVol" min="0.05" max="1" step="0.05" style="flex:1"><button class="btn" id="clickTest">Preview</button></div>
+    </div>
     <div class="field" id="docLangField" hidden>
       <label for="docLang">Language of this document</label>
       <select id="docLang">
@@ -400,15 +421,36 @@ details pre{white-space:pre-wrap;font-size:11px;max-height:40dvh;overflow:auto;b
 const LANGS = ['sv','en','ru','uk'];
 const LANG_NAME = {sv:'Svenska', en:'English', ru:'Русский', uk:'Українська'};
 const LANG_TAG = {sv:'sv-SE', en:'en-GB', ru:'ru-RU', uk:'uk-UA'};
+const WORDS = {
+  en:{line:'Line', point:'Point', sub:'Sub-point', end:'End of list', intro:n => n === 1 ? 'List, 1 item' : 'List, ' + n + ' items'},
+  sv:{line:'Rad', point:'Punkt', sub:'Underpunkt', end:'Slut på listan', intro:n => n === 1 ? 'Lista' : 'Lista med ' + n + ' punkter'},
+  ru:{line:'Строка', point:'Пункт', sub:'Подпункт', end:'Конец списка', intro:n => 'Список, пунктов: ' + n},
+  uk:{line:'Рядок', point:'Пункт', sub:'Підпункт', end:'Кінець списку', intro:n => 'Список, пунктів: ' + n}
+};
 const SAMPLE = {sv:'Det här är en provmening.', en:'This is a sample sentence.', ru:'Это пример предложения.', uk:'Це приклад речення.'};
 
 function joinLine(a, b){
-  if (/\p{L}-$/u.test(a) && /^\p{Ll}/u.test(b)) return a.slice(0,-1) + b;   // de-hyphenate
-  return a + ' ' + b;
+  const lead = b.match(/^[\uE000-\uE01F]*/)[0], rest = b.slice(lead.length);
+  if (/\p{L}-$/u.test(a) && /^\p{Ll}/u.test(rest)) return a.slice(0,-1) + lead + rest;   // de-hyphenate
+  return a + ' ' + lead + rest;
 }
 // Structure markers used during import (private-use characters, removed again by extractMarks):
 // U+E000 = a new PDF page starts here; U+E001..E003 = heading of level 1..3 at line start.
-const MK = /[\uE000-\uE00F]/g;
+// U+E004 + digits (U+E010..E019) = line number of the PDF line starting here;
+// U+E006 + level (U+E011..E019) = list item level (Word).
+const MK = /[\uE000-\uE01F]/g;
+const lnMark = n => '\uE004' + String(n).split('').map(d => String.fromCharCode(0xE010 + +d)).join('');
+const lvMark = l => '\uE006' + String.fromCharCode(0xE010 + Math.min(9, l));
+// List item at paragraph start: strong bullets (incl. Word symbol-font bullets), weak bullets (* -), 1. 1) (1) a. a) (a) i. iv)
+const BULLET_CH = '•◦▪▫●○■□‣⁃∙\uF0B7\uF0A7\uF0D8\uF0FC';
+const ITEM_RE = new RegExp('^(?:([' + BULLET_CH + '])\\s*|([*-])\\s+|\\((\\d{1,3}|[a-zA-Z]|[ivxIVX]{1,5})\\)\\s+|(\\d{1,3}|[a-zA-Z]|[ivxIVX]{1,5})([.)])\\s+)(?=\\S)', 'u');
+const STRONG_RE = new RegExp('^[' + BULLET_CH + ']', 'u');
+const BULLETS_G = new RegExp('[' + BULLET_CH + ']', 'gu');
+// Should line l start a new list item paragraph after paragraph prev? (all marker-free)
+function startsItem(prevPara, l){
+  if (!ITEM_RE.test(l)) return false;
+  return STRONG_RE.test(l) || /[.!?:;]$/.test(prevPara) || ITEM_RE.test(prevPara);
+}
 const HEADMK = /[\uE001-\uE003]/;
 // Clean text; one paragraph per line. Lines broken mid-sentence are re-joined.
 function normalize(raw){
@@ -419,29 +461,102 @@ function normalize(raw){
   for (const l of lines){
     const prev = out[out.length-1];
     const pc = prev ? prev.replace(MK,'') : '', lc = l.replace(MK,'');
-    if (prev && pc && !HEADMK.test(prev) && !HEADMK.test(l) && !/[.!?…:;"”»)\]]$/.test(pc) && /^\p{Ll}/u.test(lc)){
+    if (prev && pc && !HEADMK.test(prev) && !HEADMK.test(l) && !/[.!?…:;"”»)\]]$/.test(pc) && /^\p{Ll}/u.test(lc) && !startsItem(pc, lc) && !l.includes('\uE006')){
       out[out.length-1] = (/\p{L}-$/u.test(pc) && /^\p{Ll}/u.test(lc)) ? prev.slice(0,-1) + l : prev + ' ' + l;
     } else out.push(l);
   }
   return out.join('\n');
 }
-// Remove markers; return clean text plus page start offsets and headings.
+// Remove markers; return clean text plus page starts, headings, line numbers and list levels.
 function extractMarks(norm){
-  const pages = [], heads = [], out = []; let pos = 0;
+  const pages = [], heads = [], lines = [], listLv = [], out = []; let pos = 0;
   for (const line of norm.split('\n')){
-    let clean = '', lvl = 0;
-    for (const ch of line){
-      if (ch === '\uE000') pages.push(pos + clean.length);
-      else if (ch >= '\uE001' && ch <= '\uE003') lvl = ch.charCodeAt(0) - 0xE000;
-      else clean += ch;
+    let clean = '', lvl = 0; const loc = [];
+    for (let i = 0; i < line.length; i++){
+      const c = line.charCodeAt(i);
+      if (c === 0xE000) loc.push(['p', clean.length]);
+      else if (c >= 0xE001 && c <= 0xE003) lvl = c - 0xE000;
+      else if (c === 0xE004){
+        let d = '';
+        while (i + 1 < line.length){ const k = line.charCodeAt(i+1); if (k >= 0xE010 && k <= 0xE019){ d += (k - 0xE010); i++; } else break; }
+        if (d) loc.push(['l', clean.length, +d]);
+      }
+      else if (c === 0xE006){ const k = line.charCodeAt(i+1); if (k >= 0xE011 && k <= 0xE019){ loc.push(['v', clean.length, k - 0xE010]); i++; } }
+      else if (c >= 0xE000 && c <= 0xE01F){}             // stray marker
+      else clean += line[i];
     }
+    const lead = clean.length - clean.trimStart().length;
     clean = clean.trim();
-    if (!clean) continue;                       // marker-only line: its page starts at the next line
+    if (!clean){ for (const m of loc) if (m[0] === 'p') pages.push(pos); continue; }  // marker-only line: page starts at next line
+    for (const [t, at, v] of loc){
+      const o = pos + Math.max(0, Math.min(clean.length - 1, at - lead));
+      if (t === 'p') pages.push(o); else if (t === 'l') lines.push({off:o, n:v}); else listLv.push({off:o, level:v});
+    }
     if (lvl) heads.push({off:pos, level:lvl, title:clean.slice(0,100)});
     out.push(clean); pos += clean.length + 1;
   }
   const text = out.join('\n');
-  return {text, pages: pages.map(p => Math.min(p, Math.max(0, text.length - 1))), heads};
+  lines.sort((x,y) => x.off - y.off);
+  return {text, pages: pages.map(p => Math.min(p, Math.max(0, text.length - 1))), heads, lines, listLv};
+}
+// Pasted or .txt manuscript text with line numbers at line starts ("245 The cells…", or "245" alone on a line).
+function stripTextLineNums(raw){
+  const lines = raw.replace(/\r\n?/g, '\n').split('\n');
+  const re = /^\s*(\d{1,5})(?:\s+(?=\S)|\s*$)/;
+  const nonEmpty = lines.filter(l => l.trim()).length;
+  const hits = []; lines.forEach((l, i) => { const m = l.match(re); if (m) hits.push(+m[1]); });
+  if (hits.length < 5 || hits.length < nonEmpty * 0.45) return raw;
+  let inc = 0; for (let k = 1; k < hits.length; k++) if (hits[k] > hits[k-1]) inc++;
+  if (inc < (hits.length - 1) * 0.8) return raw;
+  const out = []; let pending = '';
+  for (const l of lines){
+    const m = l.match(re);
+    if (!m){ out.push(pending + l); pending = ''; continue; }
+    const rest = l.slice(m[0].length);
+    if (rest.trim()){ out.push(lnMark(+m[1]) + rest); pending = ''; }
+    else pending = lnMark(+m[1]);                       // number alone: attach to the next text line
+  }
+  return out.join('\n');
+}
+// List items: one entry per paragraph (null if not a list item).
+function romanVal(r){ const m = {i:1, v:5, x:10}; let t = 0; r = r.toLowerCase(); for (let i = 0; i < r.length; i++){ const a = m[r[i]], b = m[r[i+1]] || 0; t += a < b ? -a : a; } return t; }
+function itemInfo(line, prevSig){
+  const m = line.match(ITEM_RE); if (!m) return null;
+  const mlen = m[0].length;
+  if (m[1] || m[2]) return {kind:'bullet', sig:'b' + (m[1] || m[2]), label:'', mlen, strong:!!m[1]};
+  const raw = m[3] ?? m[4], delim = m[3] != null ? '()' : m[5];
+  const prevRoman = prevSig && /^[rR]/.test(prevSig), prevAlpha = prevSig && /^[aA]/.test(prevSig);
+  let type, label;
+  if (/^\d+$/.test(raw)){ type = 'n'; label = String(+raw); }
+  else if (/^[ivx]+$/i.test(raw) && (raw.length > 1 || prevRoman || (/^i$/i.test(raw) && !prevAlpha))){ type = raw === raw.toLowerCase() ? 'r' : 'R'; label = String(romanVal(raw)); }
+  else { type = raw === raw.toLowerCase() ? 'a' : 'A'; label = raw.toLowerCase(); }
+  return {kind:'ordered', sig:type + delim, label, mlen, strong:false};
+}
+function detectLists(paras, text, exclude, levels){
+  const lv = new Map((levels || []).map(x => [x.off, x.level]));
+  const res = new Array(paras.length).fill(null);
+  let i = 0;
+  while (i < paras.length){
+    const grp = []; let prevSig = null;
+    while (i < paras.length && !exclude.has(i)){
+      const p = paras[i], info = itemInfo(text.slice(p.s, Math.min(p.e, p.s + 16)), prevSig);
+      if (!info) break;
+      grp.push([i, info]); prevSig = info.sig; i++;
+    }
+    if (grp.length >= 2 || (grp.length === 1 && grp[0][1].strong)){
+      const stack = []; let count = 0;
+      grp.forEach(([pi, info], k) => {
+        let level = lv.get(paras[pi].s);
+        if (level == null){ const j = stack.indexOf(info.sig); if (j >= 0){ stack.length = j + 1; level = j + 1; } else { stack.push(info.sig); level = stack.length; } }
+        if (level === 1) count++;
+        res[pi] = {...info, level, first:k === 0, last:k === grp.length - 1};
+      });
+      const gk = res[grp[0][0]].kind;
+      grp.forEach(([pi]) => { res[pi].count = count; res[pi].gkind = gk; });
+    }
+    if (!grp.length) i++;
+  }
+  return res;
 }
 // Guess headings in text without structure (pasted text, .txt, PDFs without bookmarks).
 const HEAD_WORD = /^(chapter|part|section|kapitel|del|avsnitt|глава|часть|раздел|розділ|частина)\s+([\dIVXLCivxlc]+|\p{L}+)\b/iu;
@@ -490,6 +605,7 @@ function splitSentences(p){
     if (m[0][0] === '.'){
       const w = p.slice(start, m.index).match(/(\p{L}+)$/u);
       if (w && (w[1].length === 1 || ABBR.has(w[1].toLowerCase()))) continue;
+      if (/^\(?[\divxIVX]{1,4}$/.test(p.slice(start, m.index).trim())) continue;   // list number
     }
     out.push([start, m.index + m[0].trimEnd().length]);
     start = m.index + m[0].length;
@@ -575,7 +691,8 @@ const Diag = {
 };
 
 /* ---------- Settings ---------- */
-const DEFAULTS = {theme:'night', font:20, rate:1, wake:true, fade:true, timer:'off', voices:{}, lastDoc:null, firstUse:0, lastBackup:0};
+const DEFAULTS = {theme:'night', font:20, rate:1, wake:true, fade:true, timer:'off', voices:{}, lastDoc:null, firstUse:0, lastBackup:0,
+                  lineNums:'off', listStyle:'mixed', clickVol:0.3};
 let S = (() => { try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('readaloud.settings') || '{}')); } catch { return {...DEFAULTS}; } })();
 function saveS(){ try { localStorage.setItem('readaloud.settings', JSON.stringify(S)); } catch {} }
 
@@ -640,6 +757,7 @@ let VOICES = [];
 const NOVELTY = /^(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Junior|Ralph|Kathy|Fred)\b/;
 const ELOQ = /^(Eddy|Flo|Grandma|Grandpa|Reed|Rocko|Sandy|Shelley)\b/;
 function loadVoices(){ if (HAS_TTS){ VOICES = speechSynthesis.getVoices(); if ($('dlgSettings').open) renderVoices(); if (VOICES.length) setTimeout(checkVoices, 500); } }
+const GB_MALE = /\b(Ryan|Thomas|George|Daniel|Arthur|Jamie|Oliver|Alfie|Elliot|Ethan|Noah|UK English Male)\b|en-gb-x-(gbb|gbd|rjs)/i;
 function voiceScore(v){
   const n = v.name + ' ' + v.voiceURI; let s = 0;
   if (/Natural|Neural|Online/i.test(n)) s += 10;
@@ -647,6 +765,11 @@ function voiceScore(v){
   if (/enhanced/i.test(n)) s += 6;
   if (/Google/i.test(n)) s += 2;
   if (ELOQ.test(v.name)) s -= 6;
+  const lang = v.lang.replace('_','-').toLowerCase();
+  if (lang.startsWith('en')){                                   // default English voice: British, male
+    if (lang === 'en-gb') s += 20;
+    if (GB_MALE.test(n)) s += 20;
+  }
   return s;
 }
 function voicesFor(code){
@@ -657,6 +780,39 @@ function voiceFor(code){
   const list = voicesFor(code);
   return list.find(v => v.voiceURI === S.voices[code]) || list[0] || null;
 }
+
+/* ---------- Gentle click before list items ---------- */
+const Click = {
+  ctx:null,
+  unlock(){
+    try {
+      if (!this.ctx){ const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; this.ctx = new AC(); }
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+    } catch {}
+  },
+  play(level = 1, vol){
+    const c = this.ctx; if (!c) return;
+    const v = (vol ?? S.clickVol) * Timer.volume() * (level > 1 ? 0.75 : 1); if (v <= 0) return;
+    try {
+      const t = c.currentTime + 0.005;
+      // soft rounded tone, ~1 kHz, gone after ~30 ms: a quiet wooden tap, not a beep
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(level > 1 ? 1400 : 1100, t);
+      o.frequency.exponentialRampToValueAtTime(level > 1 ? 1000 : 750, t + 0.03);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(v * 0.5, t + 0.002);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
+      o.connect(g).connect(c.destination); o.start(t); o.stop(t + 0.05);
+      // tiny muffled noise transient for the "tap" texture
+      const n = Math.floor(c.sampleRate * 0.01), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 4);
+      const src = c.createBufferSource(), f = c.createBiquadFilter(), g2 = c.createGain();
+      src.buffer = buf; f.type = 'lowpass'; f.frequency.value = 2200; g2.gain.value = v * 0.3;
+      src.connect(f).connect(g2).connect(c.destination); src.start(t);
+    } catch (e) { Diag.add('click failed ' + e.message); }
+  }
+};
 
 /* ---------- Wake lock ---------- */
 const Wake = {
@@ -701,11 +857,40 @@ const Timer = {
 /* ---------- Player ---------- */
 const P = { doc:null, text:'', model:{paras:[], sents:[]}, idx:0, playing:false, finished:false,
             gen:0, utter:null, uStart:0, uDone:true, uChars:0, retry:-1, spans:[], pEls:[], curP:null, userScrollAt:0, dragging:false,
-            toc:[], pages:null, skipP:new Set(), plan:null };
+            toc:[], pages:null, skipP:new Set(), plan:null, lists:[], lineOff:null, lineNo:null };
 
 function hardStop(){ P.gen++; P.uDone = true; if (HAS_TTS) speechSynthesis.cancel(); }
 
-function speakCurrent(){
+function listMode(kind){
+  const st = S.listStyle;
+  if (st === 'mixed') return kind === 'ordered' ? 'announce' : 'click';
+  return st;                                   // 'announce' | 'click' | 'plain'
+}
+function lineAt(off){
+  if (!P.lineOff) return null;
+  const k = sortedIdx(P.lineOff, off); return k >= 0 ? P.lineNo[k] : null;
+}
+// What to say for sentence i: list announcements, line number, item marker removed.
+function spokenFor(i){
+  const s = P.model.sents[i], para = P.model.paras[s.p], W = WORDS[para.lang] || WORDS.en;
+  let body = P.text.slice(s.s, s.e), pre = '', post = '', click = 0, delay = 0;
+  const li = P.lists[s.p];
+  if (li && i === para.first){
+    body = body.slice(li.mlen);
+    const mode = listMode(li.kind);
+    if (li.first && listMode(li.gkind) === 'announce') pre += W.intro(li.count) + '. ';
+    if (mode === 'announce') pre += (li.kind === 'ordered' ? li.label : (li.level > 1 ? W.sub : W.point)) + '. ';
+    else if (mode === 'click') click = li.level;
+    delay = li.first ? 150 : 350;
+  }
+  if (li && li.last && i === para.last && listMode(li.gkind) === 'announce') post = ' ' + W.end + '.';
+  if (S.lineNums === 'sent' || (S.lineNums === 'para' && i === para.first)){
+    const ln = lineAt(s.s); if (ln != null) pre = W.line + ' ' + ln + '. ' + pre;
+  }
+  const text = (pre + body.replace(BULLETS_G, ' ') + post).replace(/\s+/g, ' ').trim();
+  return {text, click, delay};
+}
+function speakCurrent(fromTap){
   if (P.skipP.has(P.model.sents[P.idx]?.p)){                 // landed in a skipped paragraph
     const j = nextIdx(P.idx); if (j < 0) return endOfReading(); P.idx = j;
   }
@@ -713,15 +898,20 @@ function speakCurrent(){
   const g = ++P.gen;
   highlight(); savePos();
   const lang = P.model.paras[s.p].lang;
-  const u = new SpeechSynthesisUtterance(P.text.slice(s.s, s.e));
+  const sp = spokenFor(P.idx);
+  const u = new SpeechSynthesisUtterance(sp.text || '…');
   const v = voiceFor(lang);
   if (v){ u.voice = v; u.lang = v.lang; } else u.lang = LANG_TAG[lang];
   u.rate = S.rate; u.volume = Timer.volume();
   u.onend = () => onUtterEnd(g);
   u.onerror = e => { Diag.add('error ' + e.error + ' #' + P.idx); if (g !== P.gen || e.error === 'interrupted' || e.error === 'canceled') return; onUtterEnd(g); };
   P.utter = u; P.uStart = Date.now(); P.uDone = false; P.uChars = u.text.length;
-  Diag.add('speak #' + P.idx + ' ' + lang + ' ' + (v ? v.name : 'default voice') + ' ' + u.text.length + ' chars');
-  speechSynthesis.speak(u);
+  Diag.add('speak #' + P.idx + ' ' + lang + ' ' + (v ? v.name : 'default voice') + ' ' + u.text.length + ' chars' + (sp.click ? ' +click' : ''));
+  let delay = sp.delay;
+  if (sp.click){ Click.play(sp.click); delay = Math.max(delay, 170); }
+  if (fromTap) delay = 0;                     // iOS: the first utterance must start inside the tap
+  if (!delay) return speechSynthesis.speak(u);
+  setTimeout(() => { if (g !== P.gen || !P.playing) return; P.uStart = Date.now(); speechSynthesis.speak(u); }, delay);
 }
 function onUtterEnd(g){
   if (g !== P.gen || P.uDone) return;
@@ -771,8 +961,9 @@ function play(){
   P.playing = true; setPlayIcon(); Wake.on();
   P.userScrollAt = 0;
   try { speechSynthesis.resume(); } catch {}
+  Click.unlock();
   if (speechSynthesis.speaking || speechSynthesis.pending){ hardStop(); setTimeout(() => { if (P.playing) speakCurrent(); }, 80); }
-  else speakCurrent();    // synchronous: iOS needs speech to start inside the tap
+  else speakCurrent(true);    // synchronous: iOS needs speech to start inside the tap
 }
 function pause(){
   P.playing = false; hardStop(); setPlayIcon(); Wake.off(); savePos(true);
@@ -825,6 +1016,8 @@ function renderText(){
   const frag = document.createDocumentFragment(); P.spans = new Array(P.model.sents.length); P.pEls = [];
   for (const para of P.model.paras){
     const p = document.createElement('p'); p.lang = LANG_TAG[para.lang]; P.pEls.push(p);
+    const li = P.lists[P.pEls.length - 1];
+    if (li){ p.classList.add('li'); p.style.setProperty('--lv', li.level - 1); }
     let cur = para.s;
     for (let i = para.first; i <= para.last; i++){
       const s = P.model.sents[i];
@@ -880,7 +1073,8 @@ function updateProgress(){
   const off = P.model.sents[i].s, len = P.text.length || 1;
   const pct = Math.round(100 * off / len);
   const pg = P.pages ? 'p. ' + (sortedIdx(P.pages, off) + 1 || 1) + '/' + P.pages.length + ', ' : '';
-  $('progLabel').textContent = pg + pct + '%, ' + fmtLeft((len - off) / (14.5 * S.rate));
+  const ln = lineAt(off);
+  $('progLabel').textContent = pg + (ln != null ? 'l. ' + ln + ', ' : '') + pct + '%, ' + fmtLeft((len - off) / (14.5 * S.rate));
 }
 
 /* ---------- Chapters, plans, blocks ---------- */
@@ -894,7 +1088,7 @@ function computeToc(){
   const src = (m.heads && m.heads.length) ? m.heads.map(h => ({...h, src:'doc'})) : autoHeads(text).map(h => ({...h, src:'auto'}));
   const del = new Set(m.tocDel || []);
   const byPara = new Map();
-  for (const h of src){ const p = paraIdxAt(h.off); const off = P.model.paras[p].s; if (!del.has(off) && !byPara.has(p)) byPara.set(p, {off, p, level:h.level, title:h.title, src:h.src}); }
+  for (const h of src){ const p = paraIdxAt(h.off); if (h.src === 'auto' && P.lists[p]) continue; const off = P.model.paras[p].s; if (!del.has(off) && !byPara.has(p)) byPara.set(p, {off, p, level:h.level, title:h.title, src:h.src}); }
   for (const off of (m.tocAdd || [])){ const p = paraIdxAt(off); if (!byPara.has(p)) byPara.set(p, {off:P.model.paras[p].s, p, level:1, title:(t => t.length > 60 ? t.slice(0,58) + '…' : t)(P.text.slice(P.model.paras[p].s, P.model.paras[p].e)), src:'user'}); }
   P.toc = [...byPara.values()].sort((a,b) => a.off - b.off);
 }
@@ -1004,13 +1198,16 @@ function renderToc(){
 
 /* ---------- Documents ---------- */
 // opts: {src:'pdf'|'docx'|'txt'|'paste', outline:[{title,page,level}]}
+const STRUCT_V = 3;   // raise when file reading changes, so re-opened files take over older entries
 async function addDocument(title, raw, opts = {}){
   const st = extractMarks(normalize(raw || ''));
   const text = st.text;
   if (!text){ toast('No readable text found.'); return; }
   let heads = st.heads;
   if (opts.outline && opts.outline.length && st.pages.length) heads = mapOutline(opts.outline, st.pages, text);
-  const struct = {v:2, src:opts.src || 'txt', pages: st.pages.length ? st.pages : null, heads};
+  const struct = {v:STRUCT_V, src:opts.src || 'txt', pages: st.pages.length ? st.pages : null, heads,
+                  lineOff: st.lines.length ? st.lines.map(x => x.off) : null, lineNo: st.lines.length ? st.lines.map(x => x.n) : null,
+                  listLv: st.listLv.length ? st.listLv : null};
   const id = makeId(text);
   const ex = await DB.getMeta(id);
   if (ex){
@@ -1021,20 +1218,27 @@ async function addDocument(title, raw, opts = {}){
     return openDoc(id);
   }
   const meta = {id, title: (title || text.split('\n')[0]).slice(0, 120), len:text.length, offset:0, created:Date.now(), opened:Date.now(), lang:'auto', hasText:true, ...struct};
-  // Same file added in version 1 (read slightly differently)? Carry its position and marks over.
-  const old = (await DB.allMeta()).find(m => (m.v || 1) < 2 && m.hasText && m.title === meta.title && m.id !== id);
+  // Same file added by an earlier version (read slightly differently)? Carry its position and marks over.
+  const isFile = ['pdf','docx','txt'].includes(meta.src);
+  const old = isFile && (await DB.allMeta()).find(m => (m.v || 1) < STRUCT_V && m.hasText && m.title === meta.title && m.id !== id && (!m.src || m.src === meta.src));
   let migrated = false;
   if (old){
     const oldText = await DB.getText(old.id);
     if (oldText){
-      meta.offset = mapOffset(oldText, text, old.offset || 0);
+      const map = o => mapOffset(oldText, text, o);
+      meta.offset = map(old.offset || 0);
       meta.lang = old.lang || 'auto'; meta.created = old.created || meta.created;
+      if (old.skips) meta.skips = old.skips.map(map);
+      if (old.tocAdd) meta.tocAdd = old.tocAdd.map(map);
+      if (old.tocDel) meta.tocDel = old.tocDel.map(map);
+      if (old.blocks) meta.blocks = old.blocks.map(b => ({s:map(b.s), e:b.e == null ? null : Math.min(text.length, map(Math.max(b.s, b.e - 30)) + 30)}));
       await DB.del(old.id); migrated = true;
     }
   }
   await DB.putText(id, text); await DB.putMeta(meta);
   requestPersist();
-  if (migrated) toast('Updated from the earlier version. Your position is kept.', 3500);
+  if (migrated) toast('Updated from the earlier version. Your position and marks are kept.', 3500);
+  else if (meta.lineOff) toast('Line numbers found. They are skipped when reading unless turned on in Settings.', 4500);
   return openDoc(id, {askResume:migrated});
 }
 // Find the same passage in a re-read text; fall back to the same relative position.
@@ -1067,6 +1271,9 @@ async function openDoc(id, {askResume = true} = {}){
   P.model = buildModel(text, meta.lang);
   P.pages = meta.pages && meta.pages.length > 1 ? meta.pages : null;
   P.skipP = new Set((meta.skips || []).map(paraIdxAt));
+  P.lineOff = meta.lineOff && meta.lineOff.length ? meta.lineOff : null; P.lineNo = P.lineOff ? meta.lineNo : null;
+  const explicit = new Set((meta.heads || []).map(h => paraIdxAt(h.off)));
+  P.lists = detectLists(P.model.paras, text, explicit, meta.listLv);
   computeToc();
   if (meta.plan && meta.plan.r && meta.plan.r.length){
     const r = rangesToIdx(meta.plan.r);
@@ -1092,7 +1299,7 @@ function closeDoc(){
   if (P.playing) pause();
   P.doc = null; P.text = ''; P.model = {paras:[], sents:[]}; P.spans = [];
   $('text').textContent = ''; $('text').hidden = true; $('empty').hidden = false; $('resume').hidden = true;
-  P.toc = []; P.pages = null; P.skipP = new Set(); P.plan = null; updatePlanBar(); $('where').textContent = '';
+  P.toc = []; P.pages = null; P.skipP = new Set(); P.plan = null; P.lists = []; P.lineOff = P.lineNo = null; updatePlanBar(); $('where').textContent = '';
   $('docTitle').textContent = 'Read Aloud'; S.lastDoc = null; saveS(); updateProgress();
 }
 
@@ -1105,7 +1312,7 @@ async function readFile(f){
     if (ext === 'pdf') res = await readPdf(f);
     else if (ext === 'docx') res = {text: await readDocx(f), src:'docx'};
     else if (ext === 'doc') { toast('Old .doc files are not supported. Save it as .docx or PDF first.', 5000); return; }
-    else res = {text: (await f.text()).replace(MK,''), src:'txt'};
+    else res = {text: stripTextLineNums((await f.text()).replace(MK,'')), src:'txt'};
     if (res && res.text != null) await addDocument(title, res.text, res);
   } catch (e) { console.error(e); toast('Could not read ' + f.name + ': ' + (e.message || e), 6000); }
 }
@@ -1115,19 +1322,64 @@ async function readDocx(f){
   const r = await mammoth.convertToHtml({arrayBuffer: await f.arrayBuffer()});
   const dom = new DOMParser().parseFromString(r.value, 'text/html');
   const lines = [];
-  const walk = el => {
+  // Word does not store the numbering style, so numbered lists become 1. 2. 3. at every level.
+  const walk = (el, depth = 0) => {
     for (const c of el.children){
       const t = c.tagName;
       if (/^H[1-6]$/.test(t)) lines.push(String.fromCharCode(0xE000 + Math.min(3, +t[1])) + c.textContent);
       else if (t === 'P') lines.push(c.textContent);
-      else if (t === 'LI'){ const k = c.cloneNode(true); k.querySelectorAll('ul,ol').forEach(x => x.remove()); lines.push(k.textContent); c.querySelectorAll(':scope > ul, :scope > ol').forEach(walk); }
+      else if (t === 'UL' || t === 'OL'){
+        let n = 0;
+        for (const li of c.children){
+          if (li.tagName !== 'LI') continue; n++;
+          const k = li.cloneNode(true); k.querySelectorAll('ul,ol').forEach(x => x.remove());
+          const label = t === 'OL' ? n + '.' : (depth % 2 ? '◦' : '•');
+          lines.push(lvMark(depth + 1) + label + ' ' + k.textContent.trim());
+          for (const sub of li.querySelectorAll(':scope > ul, :scope > ol')) walk({children:[sub]}, depth + 1);
+        }
+      }
       else if (t === 'TABLE') c.querySelectorAll('tr').forEach(tr => lines.push([...tr.children].map(td => td.textContent.trim()).filter(Boolean).join(', ')));
-      else walk(c);
+      else walk(c, depth);
     }
   };
   walk(dom.body);
   toast('Added ' + f.name);
   return lines.join('\n');
+}
+// Manuscript line numbers: digits-only items in one margin, increasing down the page.
+function pdfLineNumbers(items){
+  const isNum = it => /^\s*\d{1,5}\s*$/.test(it.str);
+  const nums = items.filter(isNum), words = items.filter(it => /\p{L}{2,}/u.test(it.str));
+  if (nums.length < 5 || words.length < 5) return null;
+  const pct = (a, q) => { a = [...a].sort((x,y) => x-y); return a[Math.min(a.length - 1, Math.floor(a.length * q))]; };
+  const bodyL = pct(words.map(it => it.transform[4]), 0.1);
+  const bodyR = pct(words.map(it => it.transform[4] + (it.width || 0)), 0.9);
+  const sides = [nums.filter(it => it.transform[4] + (it.width || 0) < bodyL - 1), nums.filter(it => it.transform[4] > bodyR + 1)];
+  const side = sides[0].length >= sides[1].length ? sides[0] : sides[1];
+  if (side.length < 5) return null;
+  side.sort((a,b) => b.transform[5] - a.transform[5]);                // top to bottom
+  const v = side.map(it => +it.str.trim());
+  let inc = 0; const diffs = [];
+  for (let i = 1; i < v.length; i++){ if (v[i] > v[i-1]){ inc++; diffs.push(v[i] - v[i-1]); } }
+  if (inc < (v.length - 1) * 0.8) return null;
+  diffs.sort((a,b) => a-b);
+  return {remove:new Set(side), marks:side.map((it, i) => ({y:it.transform[5], h:Math.abs(it.transform[3]) || 10, n:v[i]})), step:diffs[diffs.length >> 1] || 1};
+}
+function assignLineNumbers(lines, ln){
+  for (const m of ln.marks){
+    let best = null, bd = Infinity;
+    for (const l of lines){ const d = Math.abs(l.y - m.y); if (d < bd){ bd = d; best = l; } }
+    if (best && bd < Math.max(m.h, best.h) * 0.6 && best.n == null) best.n = m.n;
+  }
+  if (ln.step > 1){                      // numbered every 5th line: fill in the lines between
+    let last = null;
+    lines.forEach((l, i) => {
+      if (l.n != null) last = {n:l.n, i};
+      else if (last && i - last.i < ln.step) l.n = last.n + (i - last.i);
+    });
+    const k = lines.findIndex(l => l.n != null);         // lines above the first number on the page
+    for (let j = k - 1; k > 0 && j >= 0 && k - j < ln.step; j--) if (lines[k].n - (k - j) >= 1) lines[j].n = lines[k].n - (k - j);
+  }
 }
 async function readPdf(f){
   toast('Reading ' + f.name + '…', 0);
@@ -1164,8 +1416,10 @@ async function readPdf(f){
     const tc = await page.getTextContent();
     const lines = []; let cur = '', curY = null, curH = 0, endX = null, startX = 0;
     const push = () => { if (cur.trim()) lines.push({t:cur.replace(/\s+/g,' ').trim(), y:curY, h:curH, x0:startX, x1:endX}); cur = ''; endX = null; };
-    for (const it of tc.items){
-      if (!('str' in it)) continue;
+    const items = tc.items.filter(it => 'str' in it);
+    const ln = pdfLineNumbers(items);
+    for (const it of items){
+      if (ln && ln.remove.has(it)) continue;
       const x = it.transform[4], y = it.transform[5], h = Math.abs(it.transform[3]) || it.height || 10;
       if (curY !== null && Math.abs(y - curY) > h * 0.5) push();
       if (!cur) { curY = y; curH = h; startX = x; }
@@ -1174,6 +1428,7 @@ async function readPdf(f){
       if (it.hasEOL) push();
     }
     push();
+    if (ln) assignLineNumbers(lines, ln);
     const body = lines.filter(l => !/^\d{1,4}$/.test(l.t));        // drop bare page numbers
     const gaps = []; for (let i = 1; i < body.length; i++){ const g = body[i-1].y - body[i].y; if (g > 0) gaps.push(g); }
     gaps.sort((a,b) => a-b); const med = gaps.length ? gaps[gaps.length >> 1] : 0;
@@ -1182,14 +1437,21 @@ async function readPdf(f){
     const right = xs.length ? xs[Math.floor(xs.length * 0.8)] : 0;
     const lefts = body.map(l => l.x0).sort((a,b) => a-b);
     const left = lefts.length ? lefts[lefts.length >> 2] : 0;
+    let paraX = 0;
     body.forEach((l, i) => {
       if (i > 0){
         const prev = body[i-1], g = prev.y - l.y;
         const shortEnd = right && prev.x1 != null && /[.!?…:"”»)]$/.test(prev.t) && prev.x1 < right - (right - left) * 0.12;
-        const indent = l.x0 > left + l.h * 1.2 && Math.abs(prev.x0 - left) < l.h * 0.5;
-        if (g < 0 || (med && g > med * 1.45) || shortEnd || indent) flush();
+        const inList = ITEM_RE.test(para.replace(MK, ''));
+        const indent = !inList && l.x0 > left + l.h * 1.2 && Math.abs(prev.x0 - left) < l.h * 0.5;
+        const item = startsItem(para.replace(MK, ''), l.t);
+        // inside a list item, a line starting at or left of the item marker ends the item
+        const outdent = inList && !item && l.x0 <= paraX + l.h * 0.3 && /^\p{Lu}/u.test(l.t);
+        if (g < 0 || (med && g > med * 1.45) || shortEnd || indent || item || outdent) flush();
       }
-      para = para ? joinLine(para, l.t) : l.t;
+      if (!para) paraX = l.x0;
+      const t = (l.n != null ? lnMark(l.n) : '') + l.t;
+      para = para ? joinLine(para, t) : t;
     });
     flush();               // normalize() re-joins paragraphs that continue across pages
     if (mark){ paras.push('\uE000'); mark = false; }   // page without text still counts as a page
@@ -1242,7 +1504,7 @@ async function buildExport(){
   const metas = await DB.allMeta(); const docs = [];
   for (const m of metas){
     const d = {id:m.id, title:m.title, len:m.len, offset:m.offset||0, created:m.created, opened:m.opened, lang:m.lang||'auto',
-               v:m.v, src:m.src, pages:m.pages, heads:m.heads, tocAdd:m.tocAdd, tocDel:m.tocDel, skips:m.skips, blocks:m.blocks, plan:m.plan};
+               v:m.v, src:m.src, pages:m.pages, heads:m.heads, lineOff:m.lineOff, lineNo:m.lineNo, listLv:m.listLv, tocAdd:m.tocAdd, tocDel:m.tocDel, skips:m.skips, blocks:m.blocks, plan:m.plan};
     if (withText && m.hasText){ const t = await DB.getText(m.id); if (t != null) d.text = t; }
     docs.push(d);
   }
@@ -1271,6 +1533,8 @@ function mergeMarks(m, d){
   if (!m.pages && Array.isArray(d.pages)) m.pages = nums(d.pages);
   if (!m.heads && Array.isArray(d.heads)) m.heads = d.heads.filter(h => h && Number.isFinite(h.off)).map(h => ({off:h.off, level:+h.level||1, title:String(h.title||'').slice(0,100)}));
   if (!m.src && d.src) m.src = String(d.src);
+  if (!m.lineOff && Array.isArray(d.lineOff) && Array.isArray(d.lineNo) && d.lineOff.length === d.lineNo.length){ m.lineOff = nums(d.lineOff); m.lineNo = nums(d.lineNo); }
+  if (!m.listLv && Array.isArray(d.listLv)) m.listLv = d.listLv.filter(x => x && Number.isFinite(x.off)).map(x => ({off:x.off, level:Math.max(1, Math.min(9, +x.level || 1))}));
   if (d.v) m.v = Math.max(m.v || 1, +d.v || 1);
   m.tocAdd = uni(m.tocAdd, d.tocAdd); m.tocDel = uni(m.tocDel, d.tocDel); m.skips = uni(m.skips, d.skips);
   const blocks = [...(m.blocks || [])];
@@ -1302,7 +1566,7 @@ async function importBackup(f){
     }
   }
   if (data.settings){
-    for (const k of ['theme','font','rate','wake','fade','timer']) if (k in data.settings) S[k] = data.settings[k];
+    for (const k of ['theme','font','rate','wake','fade','timer','lineNums','listStyle','clickVol']) if (k in data.settings) S[k] = data.settings[k];
     saveS(); applyTheme();
   }
   $('dlgImport').close();
@@ -1317,6 +1581,9 @@ function renderSettings(){
   $('fontVal').textContent = S.font;
   $('rateRange').value = S.rate; $('rateVal').textContent = S.rate.toFixed(2) + '×';
   $('optWake').checked = S.wake; $('optFade').checked = S.fade;
+  $('optLines').value = S.lineNums; $('optList').value = S.listStyle; $('clickVol').value = S.clickVol;
+  $('linesHint').textContent = 'Line numbers in manuscript margins are detected automatically and never read in the middle of a sentence. ' +
+    (!P.doc ? '' : P.lineOff ? 'This document has line numbers.' : 'This document has no line numbers. For Word manuscripts, use a PDF: Word does not store them in the file.');
   $('wakeHint').textContent = ('wakeLock' in navigator)
     ? (IOS ? 'On iPhone, reading stops if the phone locks, including when you press the side button.' : 'On a PC, reading continues when the screen locks.')
     : 'This browser cannot keep the screen awake. On iPhone, reading stops when the screen locks.';
@@ -1370,7 +1637,7 @@ document.querySelectorAll('[data-act]').forEach(b => b.onclick = () => {
   if (b.dataset.act === 'paste'){ $('pasteTitle').value = ''; $('pasteText').value = ''; openDialog($('dlgPaste')); setTimeout(() => $('pasteText').focus(), 50); }
   else $('fileIn').click();
 });
-$('pasteSave').onclick = async () => { const t = $('pasteText').value; if (!t.trim()) return; $('dlgPaste').close(); await addDocument($('pasteTitle').value.trim(), t.replace(MK,''), {src:'paste'}); };
+$('pasteSave').onclick = async () => { const t = $('pasteText').value; if (!t.trim()) return; $('dlgPaste').close(); await addDocument($('pasteTitle').value.trim(), stripTextLineNums(t.replace(MK,'')), {src:'paste'}); };
 $('fileIn').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) readFile(f); };
 $('btnLib').onclick = () => { renderLibrary(); openDialog($('dlgLib')); };
 $('btnSettings').onclick = () => { renderSettings(); openDialog($('dlgSettings')); };
@@ -1460,10 +1727,16 @@ $('fontSeg').onclick = e => { const b = e.target.closest('button[data-d]'); if (
 $('rateRange').oninput = () => { S.rate = +$('rateRange').value; $('rateVal').textContent = S.rate.toFixed(2) + '×'; saveS(); applyTheme(); updateProgress(); };
 $('optWake').onchange = () => { S.wake = $('optWake').checked; saveS(); if (S.wake && P.playing) Wake.on(); else if (!S.wake) Wake.off(); };
 $('optFade').onchange = () => { S.fade = $('optFade').checked; saveS(); };
+$('optLines').onchange = () => { S.lineNums = $('optLines').value; saveS(); };
+$('optList').onchange = () => { S.listStyle = $('optList').value; saveS(); };
+$('clickVol').oninput = () => { S.clickVol = +$('clickVol').value; saveS(); };
+$('clickTest').onclick = () => { Click.unlock(); Click.play(1); setTimeout(() => Click.play(1), 450); setTimeout(() => Click.play(2), 900); };
 $('docLang').onchange = () => {
   if (!P.doc) return; const was = P.playing; if (was) pause();
   P.doc.lang = $('docLang').value; DB.putMeta(P.doc);
-  P.model = buildModel(P.text, P.doc.lang); renderText(); curSpan = null; P.curP = null; highlight(false);
+  P.model = buildModel(P.text, P.doc.lang);
+  P.lists = detectLists(P.model.paras, P.text, new Set((P.doc.heads || []).map(h => paraIdxAt(h.off))), P.doc.listLv);
+  renderText(); curSpan = null; P.curP = null; highlight(false);
   if (was) play();
 };
 

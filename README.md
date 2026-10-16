@@ -23,3 +23,9 @@ After changing any file, raise `VERSION` in `sw.js`, e.g. `readaloud-v2`. Otherw
 - **Long-press a sentence** (right-click on PC) to read from there, set start and end marks, mark or unmark a chapter, or skip a paragraph.
 - **Reading blocks:** several start/end pairs, read in order with "Read all blocks". A start without an end reads to the end of the text.
 - **Diagnostics:** a speech event log under Settings → Diagnostics. Copy it if reading stalls.
+
+## Version 2.1
+- **Line numbers** in manuscript PDFs (margin numbers, every line or every 5th) are no longer read into the text. Settings → Read line numbers: No (default), at each paragraph start, or at each sentence start. The current line shows in the player ("l. 245"). Pasted text with line numbers at line starts works too. Word files don't store line numbers, so use a PDF.
+- **Lists:** items are kept as separate paragraphs and shown indented. By default numbered items are announced ("List, 3 items. 1. …", "End of list") and bullets get a gentle click. Other styles and the click volume are in Settings.
+- **English default voice:** British male (e.g. Ryan in Edge, Daniel or Arthur on iPhone), unless you picked another voice.
+- **Labels** under the top icons.
